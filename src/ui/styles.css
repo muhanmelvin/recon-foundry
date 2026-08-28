@@ -1,6 +1,348 @@
 /* App-specific styling. Shared chrome and tokens live in src/shared/ — put
    anything another app would also want there instead, and copy it across. */
 
+.layout {
+  display: grid;
+  grid-template-columns: minmax(300px, 25rem) minmax(0, 1fr) minmax(280px, 23rem);
+  gap: 1.25rem;
+  align-items: start;
+}
+
+.col-left,
+.col-main,
+.col-right {
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+  min-width: 0;
+}
+
+@media (max-width: 1200px) {
+  .layout {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  }
+  .col-main {
+    grid-column: 1 / -1;
+    order: 3;
+  }
+}
+
+@media (max-width: 760px) {
+  .layout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .col-main {
+    order: 0;
+  }
+}
+
+.panel h3 {
+  font-size: 0.82rem;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--ink-muted);
+  margin: 1.4rem 0 0.6rem;
+}
+.panel h3:first-child {
+  margin-top: 0;
+}
+
+/* ── Controls ─────────────────────────────────────────────────────────── */
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  margin-bottom: 0.85rem;
+}
+
+.field-label {
+  font-size: 0.78rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--ink-muted);
+}
+
+.field-hint {
+  display: block;
+  font-size: 0.82rem;
+  line-height: 1.45;
+  color: var(--ink-muted);
+}
+
+.grid-2 {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0 0.75rem;
+}
+
+.row {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+  flex-wrap: wrap;
+}
+.row > input[type="text"] {
+  flex: 1 1 8rem;
+  min-width: 0;
+}
+
+.pad {
+  margin-top: 0.75rem;
+}
+
+input[type="text"],
+select {
+  font: inherit;
+  font-size: 0.95rem;
+  color: var(--ink);
+  background: var(--surface);
+  border: 1px solid var(--rule-strong);
+  border-radius: 5px;
+  padding: 0.42rem 0.55rem;
+  width: 100%;
+}
+
+input[type="text"]:focus-visible,
+select:focus-visible,
+button:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+button {
+  font: inherit;
+  font-size: 0.9rem;
+  cursor: pointer;
+  border-radius: 5px;
+  border: 1px solid var(--rule-strong);
+  background: var(--surface);
+  color: var(--ink);
+  padding: 0.42rem 0.8rem;
+}
+button:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+button.primary {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+  font-weight: 600;
+  width: 100%;
+  padding: 0.6rem 0.8rem;
+}
+button.primary:hover {
+  color: #fff;
+  filter: brightness(1.08);
+}
+button.ghost {
+  background: transparent;
+}
+
+.scheme {
+  display: flex;
+  gap: 0.6rem;
+  align-items: flex-start;
+  padding: 0.55rem 0;
+  border-top: 1px solid var(--rule);
+  cursor: pointer;
+}
+.scheme input {
+  margin-top: 0.25rem;
+  flex: none;
+  accent-color: var(--accent);
+}
+.scheme strong {
+  display: block;
+  font-size: 0.92rem;
+  font-weight: 600;
+}
+
+/* ── Ties ─────────────────────────────────────────────────────────────── */
+
+.tie {
+  display: flex;
+  gap: 0.6rem;
+  padding: 0.5rem 0;
+  border-top: 1px solid var(--rule);
+}
+
+.tie-mark {
+  flex: none;
+  width: 1.4rem;
+  height: 1.4rem;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  font-size: 0.8rem;
+  background: var(--info-soft);
+  color: var(--ok);
+}
+.tie-broken .tie-mark {
+  background: var(--high-soft);
+  color: var(--high-ink);
+}
+
+.tie-name {
+  font-size: 0.9rem;
+  font-weight: 600;
+}
+
+/* The state is in words as well as in colour and a glyph. */
+.tie-state {
+  font-weight: 400;
+  color: var(--ink-muted);
+}
+.tie-broken .tie-state {
+  color: var(--high-ink);
+  font-weight: 600;
+}
+
+.tie-detail {
+  margin: 0.35rem 0 0;
+  padding-left: 1.1rem;
+  font-size: 0.82rem;
+  color: var(--high-ink);
+}
+.tie-detail li {
+  margin-bottom: 0.25rem;
+}
+
+/* ── Preview ──────────────────────────────────────────────────────────── */
+
+.tabs,
+.subtabs,
+.yearpicker {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+}
+.tabs {
+  border-bottom: 1px solid var(--rule);
+  padding-bottom: 0.6rem;
+  margin-bottom: 0.6rem;
+}
+.subtabs,
+.yearpicker {
+  margin-bottom: 0.6rem;
+}
+
+.tab,
+.subtab {
+  border: 1px solid transparent;
+  background: transparent;
+  padding: 0.3rem 0.6rem;
+  font-size: 0.86rem;
+  color: var(--ink-muted);
+}
+.tab.on,
+.subtab.on {
+  background: var(--accent-soft);
+  border-color: var(--accent);
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.doc-frame {
+  width: 100%;
+  height: 70vh;
+  min-height: 30rem;
+  border: 1px solid var(--rule);
+  border-radius: 6px;
+  background: #fff;
+}
+
+table.sheet {
+  border-collapse: collapse;
+  font-size: 0.82rem;
+  width: 100%;
+}
+table.sheet td {
+  border-bottom: 1px solid var(--rule);
+  padding: 0.28rem 0.5rem;
+  white-space: nowrap;
+  vertical-align: top;
+}
+table.sheet td.num {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+table.sheet td.strong {
+  font-weight: 600;
+}
+table.sheet tr:first-child td {
+  position: sticky;
+  top: 0;
+  background: var(--surface-sunk);
+  font-weight: 600;
+  border-bottom: 1px solid var(--rule-strong);
+}
+
+/* ── Findings ─────────────────────────────────────────────────────────── */
+
+.finding {
+  border: 1px solid var(--rule);
+  border-left: 3px solid var(--info);
+  border-radius: 5px;
+  padding: 0.7rem 0.8rem;
+  margin-bottom: 0.7rem;
+  background: var(--surface-sunk);
+}
+.finding-high {
+  border-left-color: var(--high);
+}
+.finding-review {
+  border-left-color: var(--review);
+}
+
+.finding-head {
+  display: flex;
+  gap: 0.35rem;
+  flex-wrap: wrap;
+  margin-bottom: 0.35rem;
+}
+
+/* Severity is never carried by colour alone: the chip says the word. */
+.chip {
+  font-size: 0.72rem;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  padding: 0.12rem 0.45rem;
+  border-radius: 3px;
+  background: var(--info-soft);
+  color: var(--info-ink);
+  border: 1px solid var(--rule);
+}
+.chip-high {
+  background: var(--high-soft);
+  color: var(--high-ink);
+}
+.chip-review {
+  background: var(--review-soft);
+  color: var(--review-ink);
+}
+
+.finding-title {
+  font-weight: 600;
+  font-size: 0.92rem;
+  margin-bottom: 0.3rem;
+}
+.finding p {
+  margin: 0 0 0.4rem;
+  font-size: 0.88rem;
+}
+
+.evidence {
+  margin: 0.2rem 0 0;
+  padding-left: 1.1rem;
+  font-size: 0.82rem;
+  color: var(--ink-muted);
+}
+.evidence li {
+  margin-bottom: 0.2rem;
+}
+
 .mono {
   font-family: var(--font-mono);
   font-size: 0.9rem;
