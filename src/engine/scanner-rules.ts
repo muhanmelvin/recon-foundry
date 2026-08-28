@@ -65,3 +65,47 @@ export function normalizeLabel(s: string): string {
 export function looksCapital(label: string): boolean {
   return CAPITAL_KEYWORDS.test(normalizeLabel(label));
 }
+
+/**
+ * RF-09's recomputation of a year's amortization installment: straight-line
+ * principal plus simple interest on the declining balance.
+ *
+ * Reproduced here down to the order of the arithmetic, because the scanner
+ * compares its own answer with what the statement bills and reports a
+ * difference over a dollar as a finding. A clean package has to land on the
+ * same cent, so it computes its installments with this function rather than
+ * with something equivalent-looking.
+ *
+ * Source: `red-flag-scanner/src/engine/checks/rf09_capital.ts`
+ * (`monthsInService`, `expectedAmortization`) at commit c050bad.
+ */
+export function amortizationForYear(
+  totalCents: number,
+  lifeMonths: number,
+  inService: string,
+  year: number,
+  interestRatePct = 0,
+): { principal: number; interest: number; months: number; total: number } {
+  const m = /^(\d{4})-(\d{2})/.exec(inService);
+  if (!m) return { principal: 0, interest: 0, months: 0, total: 0 };
+  const start = Number(m[1]) * 12 + (Number(m[2]) - 1);
+  const end = start + lifeMonths - 1;
+  const lo = Math.max(start, year * 12);
+  const hi = Math.min(end, year * 12 + 11);
+  const months = Math.max(0, hi - lo + 1);
+  if (months === 0) return { principal: 0, interest: 0, months: 0, total: 0 };
+
+  const monthly = totalCents / lifeMonths;
+  const principal = Math.round(monthly * months);
+  let interest = 0;
+  if (interestRatePct) {
+    const r = interestRatePct / 100 / 12;
+    const firstMonthOfYear = Math.max(start, year * 12);
+    for (let k = 0; k < months; k++) {
+      const elapsed = firstMonthOfYear + k - start;
+      interest += (totalCents - monthly * elapsed) * r;
+    }
+    interest = Math.round(interest);
+  }
+  return { principal, interest, months, total: principal + interest };
+}

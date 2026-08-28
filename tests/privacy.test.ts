@@ -75,8 +75,15 @@ describe("no source file reaches the network", () => {
   it.each(srcFiles.map((f) => [relative(root, f), f] as const))("%s references no remote host", (_rel, file) => {
     // Cross-app links live in index.html's site nav. Application source under
     // src/ has no business naming a host at all.
+    //
+    // Two exceptions, both XML namespace identifiers rather than addresses:
+    // schemas.openxmlformats.org and purl.org/dc are the strings that make a
+    // .xlsx a .xlsx, written *into* the file the writer produces. Nothing
+    // resolves them, and an Office document without them is not readable. This
+    // is a local widening of the family's check; the rest of it stands.
     const text = readFileSync(file, "utf8");
-    expect(/https?:\/\/(?!www\.w3\.org)/.test(text), `remote host referenced in ${_rel}`).toBe(false);
+    const withoutNamespaces = text.replace(/https?:\/\/(?:schemas\.openxmlformats\.org|purl\.org\/dc)[^"'`\s]*/g, "");
+    expect(/https?:\/\/(?!www\.w3\.org)/.test(withoutNamespaces), `remote host referenced in ${_rel}`).toBe(false);
   });
 });
 
@@ -91,8 +98,19 @@ describe("the engine stays pure", () => {
   });
 
   it.each(engineFiles.map((f) => [relative(root, f), f] as const))("%s touches no document", (_rel, file) => {
+    // Word-boundary matching rather than a bare substring, because this repo
+    // writes Office XML: the content type that makes a workbook a workbook is
+    // "…officedocument.spreadsheetml…", which contains "document." and is not a
+    // DOM reference. `document\s*\.` does not match inside "officedocument",
+    // and still catches every real use.
     const text = readFileSync(file, "utf8");
-    const found = ["document.", "window.", "localStorage", "HTMLElement"].filter((b) => text.includes(b));
+    const banned: Array<[string, RegExp]> = [
+      ["document", /document\s*\./],
+      ["window", /window\s*\./],
+      ["localStorage", /localStorage/],
+      ["HTMLElement", /HTMLElement/],
+    ];
+    const found = banned.filter(([, re]) => re.test(text)).map(([name]) => name);
     expect(found, `DOM reference in ${_rel}: ${found.join(", ")}`).toEqual([]);
   });
 });

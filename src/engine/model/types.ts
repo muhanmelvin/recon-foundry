@@ -146,10 +146,21 @@ export interface CapitalProject {
   job_number: string;
   total_cost_cents: number;
   recovery_period_months: number;
+  /** Simple interest on the unamortized balance, as the lease permits. */
+  interest_rate_pct: number;
   amort_start: string; // ISO date, first day of a month
   amort_end: string; // ISO date, last day of a month
+  /** Straight-line principal per month. Interest is added on top, per year. */
   monthly_cents: number;
   contractor: string;
+  /**
+   * How the line is captioned on the statement — deliberately not the asset's
+   * name. A landlord summarises a year of amortization in one neutral line and
+   * leaves the asset, the job number and the invoices to the schedule behind it.
+   * It matters here for a second reason: a caption naming a roof or a parking
+   * lot reads to RF-09 as capital work expensed in a lump.
+   */
+  statement_caption: string;
   /** False when a scheme expensed the work instead of amortizing it. */
   amortized: boolean;
 }

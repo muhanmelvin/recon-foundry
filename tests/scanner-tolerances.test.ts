@@ -138,6 +138,36 @@ describe("RF-09 — nothing capital is expensed in a lump", () => {
       expect(c.recovery_period_months).toBe(model.lease.capital_life_years * 12);
     }
   });
+
+  it.each(MODELS)("%s captions the amortization line without naming capital work", (_seed, model) => {
+    // The workbook can be uploaded on its own, and the wide format carries no
+    // amortization detail — so a line captioned "Roof section replacement" would
+    // reach the scanner as a lump with nothing behind it. The asset's name lives
+    // on the schedule, where the backup is.
+    for (const c of model.capital_projects) expect(looksCapital(c.statement_caption)).toBe(false);
+    for (const y of model.years) {
+      for (const p of y.pools) {
+        if (p.capital_project_id) expect(looksCapital(p.category), p.category).toBe(false);
+      }
+    }
+  });
+
+  it.each(MODELS)("%s charges a different installment each year, because interest declines", (_seed, model) => {
+    // Straight-line principal alone repeats to the cent, which is what RF-12
+    // asks about — and it would be asking about the one line in a clean package
+    // that is honestly constant. Interest on the unamortized balance is both
+    // what most leases allow and what makes the figure move.
+    for (const c of model.capital_projects) expect(c.interest_rate_pct).toBeGreaterThan(0);
+    for (let k = 1; k < model.years.length; k++) {
+      const prev = model.years[k - 1]!.pools.filter((p) => p.capital_project_id);
+      for (const p of model.years[k]!.pools.filter((x) => x.capital_project_id)) {
+        const q = prev.find((x) => x.capital_project_id === p.capital_project_id);
+        if (!q) continue;
+        expect(p.amount_cents).not.toBe(q.amount_cents);
+        expect(Math.abs((p.amount_cents - q.amount_cents) / q.amount_cents)).toBeLessThan(0.15);
+      }
+    }
+  });
 });
 
 describe("RF-10 — no gross-up is applied, so there is none to get wrong", () => {

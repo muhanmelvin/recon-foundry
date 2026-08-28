@@ -21,7 +21,7 @@
  */
 
 import { avoidRoundAmount, type Rng, rootRng } from "../rng.ts";
-import { isRoundPoolAmount } from "../scanner-rules.ts";
+import { amortizationForYear, isRoundPoolAmount } from "../scanner-rules.ts";
 import { drawNames, FRANKLIN, siteCodeFor } from "../names.ts";
 import { addDays, iso, monthName, period } from "../dates.ts";
 import { catalogFor, monthsFor, seasonWeight, type CategorySpec } from "./categories.ts";
@@ -166,7 +166,7 @@ function buildUniverse(config: ScenarioConfig, rng: Rng, categories: readonly Ca
 // Capital
 // ---------------------------------------------------------------------------
 
-function buildCapitalProject(config: ScenarioConfig, rng: Rng, gla: number, contractor: string): CapitalProject {
+function buildCapitalProject(config: ScenarioConfig, rng: Rng, gla: number, contractor: string, years: readonly number[]): CapitalProject {
   const lifeYears = rng.child("life").pick([10, 12, 15]);
   const months = lifeYears * 12;
   const startYear = config.start_year - rng.child("start").int(1, 4);
@@ -175,35 +175,46 @@ function buildCapitalProject(config: ScenarioConfig, rng: Rng, gla: number, cont
   const assets =
     config.property_kind === "office"
       ? [
-          { name: "Chiller replacement", type: "HVAC" },
-          { name: "Elevator modernization", type: "Conveyance" },
-          { name: "Roof section replacement — north wing", type: "Roof" },
+          { name: "Chiller replacement", type: "HVAC", caption: "Amortization of building systems" },
+          { name: "Elevator modernization", type: "Conveyance", caption: "Amortization of building systems" },
+          { name: "Roof section replacement — north wing", type: "Roof", caption: "Amortization of building improvements" },
         ]
       : config.property_kind === "industrial_flex"
         ? [
-            { name: "Truck court resurfacing", type: "Sitework" },
-            { name: "Roof section replacement — Building B", type: "Roof" },
-            { name: "Yard lighting replacement", type: "Sitework" },
+            { name: "Truck court resurfacing", type: "Sitework", caption: "Amortization of site improvements" },
+            { name: "Roof section replacement — Building B", type: "Roof", caption: "Amortization of building improvements" },
+            { name: "Yard lighting replacement", type: "Sitework", caption: "Amortization of site improvements" },
           ]
         : [
-            { name: "Parking lot resurfacing", type: "Sitework" },
-            { name: "Roof section replacement — Buildings 200–400", type: "Roof" },
-            { name: "Sidewalk & curb replacement", type: "Sitework" },
+            { name: "Parking lot resurfacing", type: "Sitework", caption: "Amortization of site improvements" },
+            { name: "Roof section replacement — Buildings 200–400", type: "Roof", caption: "Amortization of building improvements" },
+            { name: "Sidewalk & curb replacement", type: "Sitework", caption: "Amortization of site improvements" },
           ];
   const asset = rng.child("asset").pick(assets);
 
-  // Pick a monthly installment first, so cost ÷ life divides exactly and the
+  // Pick the monthly principal first, so cost ÷ life divides exactly and the
   // scanner's recomputation of the annual figure lands on the cent.
   const targetTotal = Math.round(gla * rng.child("cost").float(0.85, 1.65)) * 100;
-  let monthly = Math.max(20_000, Math.round(targetTotal / months));
-  // A year of installments must not itself be a round figure — the scanner
-  // reads a round pool amount as a budget number, and it would be right to.
-  while (isRoundPoolAmount(monthly * 12)) monthly += 7;
-
+  const monthly = Math.max(20_000, Math.round(targetTotal / months));
   const amort_start = iso(startYear, startMonth, 1);
   const endIdx = startYear * 12 + (startMonth - 1) + months - 1;
-  const endYear = Math.floor(endIdx / 12);
-  const endMonth = (endIdx % 12) + 1;
+
+  // Interest on the unamortized balance is what most leases actually allow, and
+  // it does something the straight line cannot: it makes each year's installment
+  // different from the last. A charge repeated to the cent two years running is
+  // exactly what the scanner's identical-amount test asks about, and it would be
+  // asking about the one line in a clean package that is honestly constant.
+  const rates = [5, 5.25, 5.5, 5.75, 6, 6.25, 6.5, 7, 7.5, 8];
+  const offset = rng.child("rate").int(0, rates.length - 1);
+  let interest_rate_pct = rates[offset]!;
+  for (let i = 0; i < rates.length; i++) {
+    const candidate = rates[(offset + i) % rates.length]!;
+    const totals = years.map((y) => amortizationForYear(monthly * months, months, amort_start, y, candidate).total);
+    if (totals.every((t) => t > 0 && !isRoundPoolAmount(t))) {
+      interest_rate_pct = candidate;
+      break;
+    }
+  }
 
   return {
     id: "CP-1",
@@ -212,18 +223,25 @@ function buildCapitalProject(config: ScenarioConfig, rng: Rng, gla: number, cont
     job_number: `J-${startYear}-${rng.child("job").int(100, 899)}`,
     total_cost_cents: monthly * months,
     recovery_period_months: months,
+    interest_rate_pct,
     amort_start,
-    amort_end: iso(endYear, endMonth, 28),
+    amort_end: iso(Math.floor(endIdx / 12), (endIdx % 12) + 1, 28),
     monthly_cents: monthly,
     contractor,
+    statement_caption: asset.caption,
     amortized: true,
   };
 }
 
+/** What the statement calls the line, with the year of the schedule it is on. */
 function amortizationLabel(p: CapitalProject, year: number): string {
   const startYear = Number(p.amort_start.slice(0, 4));
-  const yr = year - startYear + 1;
-  return `${p.asset_name} — amortization (yr ${yr} of ${p.recovery_period_months / 12})`;
+  return `${p.statement_caption} (yr ${year - startYear + 1} of ${p.recovery_period_months / 12})`;
+}
+
+/** What the schedule says this year costs — computed the way the scanner recomputes it. */
+export function amortizationYearTotal(p: CapitalProject, year: number): number {
+  return amortizationForYear(p.total_cost_cents, p.recovery_period_months, p.amort_start, year, p.interest_rate_pct).total;
 }
 
 // ---------------------------------------------------------------------------
@@ -352,7 +370,7 @@ export function buildCleanModel(config: ScenarioConfig): ScenarioModel {
   const share_pct = Math.round((premises_sf / gla) * 100 * 10_000) / 10_000;
   const shareFrac = share_pct / 100;
 
-  const capital = buildCapitalProject(config, rng.child("capital"), gla, universe.vendors["contractor"] ?? "Halloway Construction Group");
+  const capital = buildCapitalProject(config, rng.child("capital"), gla, universe.vendors["contractor"] ?? "Halloway Construction Group", years);
   const parcels = buildTaxParcels(config, rng.child("tax"), gla, years);
   const insurance = buildInsurance(config, rng.child("insurance"), gla, years, universe.insurance_carrier, universe.policy_number);
 
@@ -406,7 +424,7 @@ export function buildCleanModel(config: ScenarioConfig): ScenarioModel {
 
     // Amortization sits outside the capped pool: an installment fixed by a
     // schedule is not something a manager controls from one year to the next.
-    const amortYearTotal = capital.monthly_cents * 12;
+    const amortYearTotal = amortizationYearTotal(capital, year);
     pools.push({
       category: amortizationLabel(capital, year),
       section: "CAM",
@@ -609,14 +627,15 @@ function insuranceGl(policy: InsurancePolicy, universe: Universe, year: number, 
 
 function amortizationGl(p: CapitalProject, universe: Universe, year: number): GLEntry[] {
   const label = amortizationLabel(p, year);
-  return Array.from({ length: 12 }, (_, i) => ({
+  const parts = allocate(amortizationYearTotal(p, year), Array.from({ length: 12 }, () => 1));
+  return parts.map((amount, i) => ({
     year,
     date: iso(year, i + 1, 28),
     account: universe.gl_accounts["Amortization"]!,
     category: label,
     vendor: p.contractor,
-    memo: `${p.asset_name} (job ${p.job_number}) — monthly amortization ${i + 1} of ${p.recovery_period_months}`,
-    amount_cents: p.monthly_cents,
+    memo: `${p.asset_name} (job ${p.job_number}) — amortization with interest at ${p.interest_rate_pct}%, month ${i + 1}`,
+    amount_cents: amount,
   }));
 }
 

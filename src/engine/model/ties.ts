@@ -19,7 +19,7 @@
  */
 
 import type { ScenarioModel, TieId } from "./types.ts";
-import { looksCapital } from "../scanner-rules.ts";
+import { amortizationForYear, looksCapital } from "../scanner-rules.ts";
 import { monthIndex, parseIso } from "../dates.ts";
 
 export interface TieBreak {
@@ -124,9 +124,9 @@ export function checkTies(model: ScenarioModel): TieBreak[] {
         push("T6", y.year, pool.amount_cents, "the reconciliation bills an amortization line for a project the schedule does not carry", pool.category);
         continue;
       }
-      const months = monthsInYear(project.amort_start, project.recovery_period_months, y.year);
-      push("T6", y.year, project.monthly_cents * months - pool.amount_cents, `${months} month(s) at ${cents(project.monthly_cents)} is ${cents(project.monthly_cents * months)}, the reconciliation bills ${cents(pool.amount_cents)}`, pool.category);
-      push("T6", y.year, project.monthly_cents * project.recovery_period_months - project.total_cost_cents, `the schedule's monthly installment over ${project.recovery_period_months} months does not recover the ${cents(project.total_cost_cents)} project cost`, pool.category);
+      const sched = amortizationForYear(project.total_cost_cents, project.recovery_period_months, project.amort_start, y.year, project.interest_rate_pct);
+      push("T6", y.year, sched.total - pool.amount_cents, `${sched.months} month(s) of principal (${cents(sched.principal)}) plus interest (${cents(sched.interest)}) is ${cents(sched.total)}, the reconciliation bills ${cents(pool.amount_cents)}`, pool.category);
+      push("T6", y.year, project.monthly_cents * project.recovery_period_months - project.total_cost_cents, `the schedule's monthly principal over ${project.recovery_period_months} months does not recover the ${cents(project.total_cost_cents)} project cost`, pool.category);
     }
 
     // --- T7: the lease reproduces the arithmetic ---------------------------
