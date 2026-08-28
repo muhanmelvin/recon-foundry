@@ -1,0 +1,82 @@
+/* ══════════════════════════════════════════════════════════════════════════
+   Design tokens — shared across every app in the family.
+
+   These are copied, not imported: each repo owns its copy so there is no
+   cross-repo build dependency. When a token changes, change it everywhere.
+   Light is the complete set; dark redefines only values, never adds new names.
+   ══════════════════════════════════════════════════════════════════════════ */
+
+:root {
+  --paper: #f5f7f5;
+  --surface: #ffffff;
+  --surface-sunk: #eef1ef;
+  --ink: #16232c;
+  --ink-muted: #5a6b76;
+  --ink-faint: #8b9aa3;
+  --rule: #d3dbde;
+  --rule-strong: #b5c1c6;
+  --accent: #1f5c7a;
+  --accent-soft: #e3edf2;
+  --high: #d03b3b;
+  --high-soft: #fbe9e9;
+  --high-ink: #a12929;
+  --review: #fab219;
+  --review-soft: #fdf1d6;
+  --review-ink: #7a5410;
+  --info: #8b9aa3;
+  --info-soft: #eef1ef;
+  --info-ink: #5a6b76;
+  --ok: #0ca30c;
+  --shadow: 0 1px 2px rgba(22, 35, 44, 0.06), 0 8px 24px -18px rgba(22, 35, 44, 0.5);
+  --font-sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  --font-serif: Georgia, "Iowan Old Style", "Palatino Linotype", "Book Antiqua", "Times New Roman", serif;
+  --font-mono: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --paper: #101820;
+    --surface: #18232c;
+    --surface-sunk: #131d25;
+    --ink: #e6edf1;
+    --ink-muted: #98a9b4;
+    --ink-faint: #6d7f8a;
+    --rule: #2a3944;
+    --rule-strong: #3b4d5a;
+    --accent: #6fb2d0;
+    --accent-soft: #1b2f3b;
+    --high: #e06060;
+    --high-soft: #2c1a1c;
+    --high-ink: #f08c8c;
+    --review: #fab219;
+    --review-soft: #2e2614;
+    --review-ink: #f0c65a;
+    --info: #6d7f8a;
+    --info-soft: #131d25;
+    --info-ink: #98a9b4;
+    --shadow: 0 1px 2px rgba(0, 0, 0, 0.4), 0 8px 24px -18px rgba(0, 0, 0, 0.9);
+  }
+}
+
+:root[data-theme="dark"] {
+  --paper: #101820;
+  --surface: #18232c;
+  --surface-sunk: #131d25;
+  --ink: #e6edf1;
+  --ink-muted: #98a9b4;
+  --ink-faint: #6d7f8a;
+  --rule: #2a3944;
+  --rule-strong: #3b4d5a;
+  --accent: #6fb2d0;
+  --accent-soft: #1b2f3b;
+  --high: #e06060;
+  --high-soft: #2c1a1c;
+  --high-ink: #f08c8c;
+  --review: #fab219;
+  --review-soft: #2e2614;
+  --review-ink: #f0c65a;
+  --info: #6d7f8a;
+  --info-soft: #131d25;
+  --info-ink: #98a9b4;
+  --shadow: 0 1px 2px rgba(0, 0, 0, 0.4), 0 8px 24px -18px rgba(0, 0, 0, 0.9);
+}

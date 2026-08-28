@@ -1,0 +1,15 @@
+node_modules/
+dist/
+dist-single/
+*.tsbuildinfo
+.DS_Store
+
+# Client-data gate: the private deny-list is injected locally or via CI secret,
+# never committed. See gates/README.md.
+gates/denylist.local.json
+
+# Working material, not part of the published repo.
+melvin_sandbox/
+
+# Fixture exports are written locally and copied into the consumer repo by hand.
+out/

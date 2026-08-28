@@ -1,0 +1,148 @@
+/* ══════════════════════════════════════════════════════════════════════════
+   Shared chrome — the site nav, masthead, zones and footer that make every app
+   look like a member of one family. Copied per repo, like the tokens.
+   App-specific styling goes in src/ui/styles.css, not here.
+   ══════════════════════════════════════════════════════════════════════════ */
+
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+html { scroll-behavior: smooth; }
+
+body {
+  margin: 0;
+  background: var(--paper);
+  color: var(--ink);
+  font-family: var(--font-sans);
+  font-size: 16px;
+  line-height: 1.55;
+  -webkit-text-size-adjust: 100%;
+}
+
+.wrap {
+  width: min(1080px, 100% - 2.5rem);
+  margin-inline: auto;
+}
+
+.skip-link {
+  position: absolute;
+  left: -9999px;
+  top: 0;
+  background: var(--surface);
+  color: var(--ink);
+  padding: 0.5rem 0.9rem;
+  z-index: 20;
+}
+.skip-link:focus { left: 0.5rem; top: 0.5rem; }
+
+/* ---- site nav (identical across apps) ---- */
+.site-nav {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.6rem 1.4rem;
+  padding: 0.65rem max(1.25rem, calc((100% - 1080px) / 2));
+  background: var(--surface);
+  border-bottom: 1px solid var(--rule);
+  font-size: 0.875rem;
+}
+.site-brand {
+  font-weight: 650;
+  letter-spacing: -0.01em;
+  color: var(--ink);
+  text-decoration: none;
+}
+.site-brand:hover { color: var(--accent); }
+.site-nav-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0 1.1rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.site-nav-list a {
+  color: var(--ink-muted);
+  text-decoration: none;
+  border-bottom: 1px solid transparent;
+}
+.site-nav-list a:hover {
+  color: var(--accent);
+  border-bottom-color: var(--accent);
+}
+.site-nav-list a[aria-current="page"] {
+  color: var(--ink);
+  border-bottom-color: var(--accent);
+}
+
+/* ---- masthead ---- */
+.masthead {
+  background: var(--surface);
+  border-bottom: 1px solid var(--rule);
+  padding: 2.5rem 0 2rem;
+}
+.masthead-inner { max-width: 44rem; }
+.eyebrow {
+  margin: 0 0 0.5rem;
+  font-size: 0.75rem;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+}
+.masthead h1 {
+  margin: 0 0 0.75rem;
+  font-size: clamp(1.5rem, 1.1rem + 1.8vw, 2.15rem);
+  line-height: 1.2;
+  letter-spacing: -0.02em;
+}
+.standfirst {
+  margin: 0 0 1.1rem;
+  color: var(--ink-muted);
+  font-size: 1.02rem;
+}
+.provenance {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem 0.75rem;
+  font-size: 0.78rem;
+  color: var(--ink-faint);
+}
+.provenance span {
+  border: 1px solid var(--rule);
+  border-radius: 999px;
+  padding: 0.15rem 0.6rem;
+}
+
+/* ---- zones ---- */
+.zone { margin: 2.25rem 0; }
+.zone-title {
+  margin: 0 0 0.9rem;
+  font-size: 0.95rem;
+  font-weight: 650;
+  letter-spacing: 0.02em;
+  color: var(--ink-muted);
+  border-bottom: 1px solid var(--rule);
+  padding-bottom: 0.4rem;
+}
+.panel {
+  background: var(--surface);
+  border: 1px solid var(--rule);
+  border-radius: 10px;
+  box-shadow: var(--shadow);
+  padding: 1.1rem 1.25rem;
+}
+
+/* ---- footer ---- */
+.site-foot {
+  margin-top: 3rem;
+  padding: 1.25rem 0 2.5rem;
+  border-top: 1px solid var(--rule);
+  font-size: 0.8rem;
+  color: var(--ink-faint);
+}
+.site-foot a { color: var(--ink-muted); }
+
+/* ---- shared table scroller: wide content scrolls itself, never the page ---- */
+.table-scroll {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}

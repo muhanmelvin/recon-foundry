@@ -1,0 +1,74 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    name: typecheck → test → build → build-gate
+    runs-on: ubuntu-latest
+    env:
+      # Private client-data deny-list (JSON array) — see gates/README.md.
+      # Set as a repository secret: Settings → Secrets and variables → Actions.
+      CLIENT_DENYLIST: ${{ secrets.CLIENT_DENYLIST }}
+      # Turns a missing secret into a red build instead of an unguarded deploy.
+      # Do not remove this.
+      REQUIRE_PRIVATE_DENYLIST: "1"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm test
+      - run: npm run build
+      - run: npm run build:single
+      - uses: actions/upload-artifact@v4
+        with:
+          name: single-file-build
+          path: dist-single/index.html
+
+  # Deploys the static bundle to GitHub Pages on every push to main.
+  # One-time setup: Settings → Pages → Source: "GitHub Actions".
+  #
+  # BASE_PATH is deliberately unset, because these apps are served at the root
+  # of their own subdomain (https://<app>.<domain>/). The custom domain comes
+  # from public/CNAME, which is copied into dist/ by the build. If you ever
+  # serve from https://<user>.github.io/<repo>/ instead, set
+  #   BASE_PATH: /${{ github.event.repository.name }}/
+  # and delete public/CNAME.
+  deploy-pages:
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs: verify
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    env:
+      CLIENT_DENYLIST: ${{ secrets.CLIENT_DENYLIST }}
+      REQUIRE_PRIVATE_DENYLIST: "1"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run build
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: dist
+      - id: deployment
+        uses: actions/deploy-pages@v4

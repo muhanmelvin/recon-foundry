@@ -1,0 +1,8 @@
+/* App-specific styling. Shared chrome and tokens live in src/shared/ — put
+   anything another app would also want there instead, and copy it across. */
+
+.mono {
+  font-family: var(--font-mono);
+  font-size: 0.9rem;
+  color: var(--ink-muted);
+}
