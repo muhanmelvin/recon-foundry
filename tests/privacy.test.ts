@@ -101,14 +101,14 @@ describe("the engine stays pure", () => {
     // Word-boundary matching rather than a bare substring, because this repo
     // writes Office XML: the content type that makes a workbook a workbook is
     // "…officedocument.spreadsheetml…", which contains "document." and is not a
-    // DOM reference. `document\s*\.` does not match inside "officedocument",
+    // DOM reference. `\bdocument\s*\.` does not match inside "officedocument",
     // and still catches every real use.
     const text = readFileSync(file, "utf8");
     const banned: Array<[string, RegExp]> = [
-      ["document", /document\s*\./],
-      ["window", /window\s*\./],
-      ["localStorage", /localStorage/],
-      ["HTMLElement", /HTMLElement/],
+      ["document", /\bdocument\s*\./],
+      ["window", /\bwindow\s*\./],
+      ["localStorage", /\blocalStorage\b/],
+      ["HTMLElement", /\bHTMLElement\b/],
     ];
     const found = banned.filter(([, re]) => re.test(text)).map(([name]) => name);
     expect(found, `DOM reference in ${_rel}: ${found.join(", ")}`).toEqual([]);

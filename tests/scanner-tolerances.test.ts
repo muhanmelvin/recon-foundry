@@ -85,8 +85,15 @@ describe("RF-07 — one fee, on the base the lease permits", () => {
     for (const y of model.years) {
       const fees = y.pools.filter((p) => p.is_fee);
       expect(fees.length).toBe(1);
-      const base = y.pools.filter((p) => !p.is_fee && p.section === "CAM").reduce((s, p) => s + p.amount_cents, 0);
+      // §6.03 allows no fee on a capital item, so the amortization line is
+      // outside the base even though it sits in the CAM section. The scanner
+      // keeps it inside its own `cam_only`, which means the fee charged here is
+      // always a little *less* than the scanner would allow — the safe
+      // direction, and the reason a clean package never trips RF-07.
+      const base = y.pools.filter((p) => !p.is_fee && !p.outside_fee_base && p.section === "CAM").reduce((s, p) => s + p.amount_cents, 0);
       expect(fees[0]!.amount_cents).toBe(mulRate(base, model.lease.fee.rate_pct / 100));
+      const scannerBase = y.pools.filter((p) => !p.is_fee && p.section === "CAM").reduce((s, p) => s + p.amount_cents, 0);
+      expect(fees[0]!.amount_cents).toBeLessThanOrEqual(mulRate(scannerBase, model.lease.fee.rate_pct / 100));
       // No administrative fee and no on-site payroll line beside it: the scanner
       // reads those together as stacked charges for one service.
       const stacked = y.pools.filter((p) => /\badministrative\b|\bsupervisory\b|\boverhead\b|\bpayroll\b|\bproperty manager\b/.test(normalizeLabel(p.category)));

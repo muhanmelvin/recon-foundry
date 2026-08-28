@@ -109,3 +109,36 @@ export function amortizationForYear(
   }
   return { principal, interest, months, total: principal + interest };
 }
+
+const FEE_RE = /\b(management|administrative|admin|supervisory|overhead|asset management|property management) fees?\b/;
+const FEE_SECTION_RE = /^(fees?|management|administrative)( fees?)?$/;
+const TAX_RE = /\btax(es)?\b|\bassessments?\b/;
+const INS_RE = /\binsurance\b|\bpremiums?\b/;
+
+/**
+ * The base RF-07 will compute a `cam_only` fee on, given the lines as the
+ * scanner sees them: every non-fee line that is not taxes and not insurance.
+ *
+ * This is wider than the base *this* lease permits. §6.03 here excludes capital
+ * items from the fee base; the scanner keeps amortization inside `cam_only`,
+ * because from a statement it has no way to tell that a particular lease says
+ * otherwise. So the scanner's estimate of a fee overcharge is smaller than the
+ * true one — the conservative direction, and the reason an answer key states the
+ * true figure while the manifest's expected range is derived from this.
+ *
+ * Source: `red-flag-scanner/src/engine/lines.ts` (`lineKind`, `feeBaseLines`).
+ */
+export function scannerFeeBaseCents(
+  lines: ReadonlyArray<{ label: string; section: string; amount_cents: number; is_fee?: boolean }>,
+): number {
+  let total = 0;
+  for (const l of lines) {
+    const label = normalizeLabel(l.label);
+    const section = normalizeLabel(l.section);
+    if (l.is_fee || FEE_RE.test(label) || FEE_SECTION_RE.test(section)) continue;
+    if (TAX_RE.test(section) || TAX_RE.test(label)) continue;
+    if (INS_RE.test(section) || INS_RE.test(label)) continue;
+    total += l.amount_cents;
+  }
+  return total;
+}

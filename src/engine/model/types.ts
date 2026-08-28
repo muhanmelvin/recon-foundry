@@ -135,6 +135,13 @@ export interface CategoryPool {
   capital_project_id?: string;
   /** Set on the fee line. */
   is_fee?: boolean;
+  /**
+   * Set on capital lines, amortized or expensed. §6.03 allows no fee on a
+   * capital item, so they are outside the base the fee is computed on — which
+   * also keeps an expensed lump from dragging the fee up with it and producing
+   * a second, unintended finding on top of the one the scheme planted.
+   */
+  outside_fee_base?: boolean;
   /** The trade whose vendor bills this category. */
   trade: string;
 }
@@ -256,6 +263,19 @@ export interface AnswerFinding {
   scheme: SchemeId;
   /** null means no scanner check sees this — only the documents do. */
   check_id: string | null;
+  /**
+   * False when the scanner will not raise this finding even though a check
+   * exists for it — set while the answer key is assembled, not by the scheme.
+   *
+   * The case that forces this: in the year a capital item is expensed in a
+   * lump, the scanner counts that lump inside the base a management fee may be
+   * charged on, because a statement gives it no way to know the lease excludes
+   * capital from the fee base. The permitted fee it computes for that year is
+   * therefore larger than the fee actually billed, and RF-07 stays silent — the
+   * overcharge is real, and the scanner is being conservative about a fact it
+   * cannot see. The manifest leaves these out; the answer key keeps them.
+   */
+  scanner_visible?: boolean;
   year: number | [number, number];
   category: string;
   severity: "info" | "review" | "high";

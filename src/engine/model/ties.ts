@@ -21,6 +21,7 @@
 import type { ScenarioModel, TieId } from "./types.ts";
 import { amortizationForYear, looksCapital } from "../scanner-rules.ts";
 import { monthIndex, parseIso } from "../dates.ts";
+import { feeBaseCents, leaseLadder } from "./recompute.ts";
 
 export interface TieBreak {
   tie: TieId;
@@ -69,6 +70,16 @@ export function checkTies(model: ScenarioModel): TieBreak[] {
   };
 
   const shareFrac = model.lease.share_pct / 100;
+
+  /**
+   * The ceiling the *lease* allows, rebuilt from the lease's own terms rather
+   * than read off the statement. The two are the same in a clean package and
+   * differ in exactly one interesting case: a landlord growing next year's
+   * ceiling on what it billed rather than on what was payable — the cap grown
+   * on the cap. Reading `cap_allowed_cents` here would take the landlord's word
+   * for the ceiling and the seam would never show.
+   */
+  const leaseCeilings = leaseLadder(model);
 
   for (const y of model.years) {
     // --- T1: the general ledger adds to the reconciliation ------------------
@@ -139,16 +150,35 @@ export function checkTies(model: ScenarioModel): TieBreak[] {
       push("T7", y.year, feeLine.amount_cents - mulRate(permittedBase, model.lease.fee.rate_pct / 100), `the lease allows ${model.lease.fee.rate_pct}% of ${cents(permittedBase)}, the statement bills ${cents(feeLine.amount_cents)}`, feeLine.category);
     }
 
-    const cap = model.lease.cap;
-    if (cap && r.cap_allowed_cents !== null) {
-      const owed = Math.min(r.controllable_actual_cents, r.cap_allowed_cents);
-      push("T7", y.year, r.cap_billed_cents - owed, `under the lease the tenant owes the lesser of ${cents(r.controllable_actual_cents)} actual and the ${cents(r.cap_allowed_cents)} ceiling; the statement bills ${cents(r.cap_billed_cents)}`, "Capped pool");
+    if (leaseCeilings) {
+      const owed = leaseCeilings.get(y.year)!;
+      push("T7", y.year, r.cap_billed_cents - owed.payable, `under the lease the tenant owes the lesser of ${cents(r.controllable_actual_cents)} actual and the ${cents(owed.ceiling)} ceiling; the statement bills ${cents(r.cap_billed_cents)}`, "Capped pool");
     }
 
     for (const pool of y.pools) {
       if (pool.capital_project_id || pool.is_fee) continue;
       if (pool.amount_cents > model.lease.capital_threshold_cents && looksCapital(pool.category)) {
         push("T7", y.year, pool.amount_cents, `${cents(pool.amount_cents)} of capital work is expensed in one year; the lease requires anything over ${cents(model.lease.capital_threshold_cents)} to be amortized`, pool.category);
+      }
+    }
+
+    // §6.01: a cost's class is fixed by the lease and is not changed by the
+    // caption, the grouping or the vendor the landlord presents it under. So a
+    // service that was controllable last year and non-controllable this year is
+    // a lease breach even when every subtotal still adds.
+    const prior = model.years.find((x) => x.year === y.year - 1);
+    if (prior) {
+      for (const pool of y.pools) {
+        if (pool.capital_project_id || pool.is_fee) continue;
+        const before = prior.pools.find((x) => x.trade === pool.trade && !x.capital_project_id && !x.is_fee);
+        if (!before || before.bucket === pool.bucket) continue;
+        push(
+          "T7",
+          y.year,
+          pool.amount_cents,
+          `${before.category} was ${before.bucket.replace("_", "-")} in ${prior.year} and is presented as ${pool.bucket.replace("_", "-")} in ${y.year} under the caption "${pool.category}"; the lease fixes the class, not the statement`,
+          pool.category,
+        );
       }
     }
   }
@@ -186,18 +216,6 @@ export function monthsInYear(amortStart: string, lifeMonths: number, year: numbe
   const lo = Math.max(start, monthIndex(year, 1));
   const hi = Math.min(end, monthIndex(year, 12));
   return Math.max(0, hi - lo + 1);
-}
-
-/** The lines a fee of this base may be charged on, mirroring the scanner's `feeBaseLines`. */
-function feeBaseCents(pools: ScenarioModel["years"][number]["pools"], base: "cam_only" | "cam_plus_insurance" | "all_opex"): number {
-  const nonFee = pools.filter((p) => !p.is_fee);
-  const keep =
-    base === "cam_only"
-      ? nonFee.filter((p) => p.section === "CAM")
-      : base === "cam_plus_insurance"
-        ? nonFee.filter((p) => p.section === "CAM" || p.section === "Insurance")
-        : nonFee;
-  return sum(keep.map((p) => p.amount_cents));
 }
 
 function cents(v: number): string {

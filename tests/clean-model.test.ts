@@ -62,9 +62,9 @@ describe("the same seed builds the same package", () => {
    * a stable name and the fix is upstream.
    */
   const GOLDEN_HASHES: Record<string, string> = {
-    "foundry-golden-1": "a9ded7436d4afa61",
-    "foundry-golden-2": "2bf4393cff40c249",
-    "foundry-golden-3": "59e80f4383ca4184",
+    "foundry-golden-1": "d21c1245d818e5ad",
+    "foundry-golden-2": "9930c5a3d5cd682e",
+    "foundry-golden-3": "4a84fb67e5530020",
   };
 
   it.each(GOLDEN_CONFIGS.map((c) => [c.seed, c] as const))("%s matches its pinned hash", (seed, config) => {

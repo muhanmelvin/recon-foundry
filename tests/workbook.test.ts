@@ -182,9 +182,9 @@ describe("the same seed renders the same bytes", () => {
    * reason in the message; never in passing.
    */
   const GOLDEN: Record<string, string> = {
-    "recon workbook": "83aa70c7fa251370",
+    "recon workbook": "a6872d460478ae84",
     "amortization schedule": "bae860dfa184eeff",
-    "tenant ledger": "2197f3c79221472b",
+    "tenant ledger": "47eacd50d4fdd41a",
   };
 
   it("matches the pinned workbook bytes", () => {

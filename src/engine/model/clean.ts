@@ -23,15 +23,15 @@
 import { avoidRoundAmount, type Rng, rootRng } from "../rng.ts";
 import { amortizationForYear, isRoundPoolAmount } from "../scanner-rules.ts";
 import { drawNames, FRANKLIN, siteCodeFor } from "../names.ts";
-import { addDays, iso, monthName, period } from "../dates.ts";
+import { iso, monthName } from "../dates.ts";
 import { catalogFor, monthsFor, seasonWeight, type CategorySpec } from "./categories.ts";
+import { recomputeRecon, setEstimates } from "./recompute.ts";
 import type {
   CapitalProject,
   CategoryPool,
   GLEntry,
   InsurancePolicy,
   LeaseAbstract,
-  LedgerEntry,
   ModelYear,
   ScenarioConfig,
   ScenarioModel,
@@ -431,6 +431,7 @@ export function buildCleanModel(config: ScenarioConfig): ScenarioModel {
       bucket: "non_controllable",
       amount_cents: amortYearTotal,
       capital_project_id: capital.id,
+      outside_fee_base: true,
       trade: "contractor",
     });
 
@@ -535,38 +536,14 @@ export function buildCleanModel(config: ScenarioConfig): ScenarioModel {
     gross_up: { allowed: true, to_pct: 95 },
   };
 
-  // --- cap schedule, tenant totals and estimates ---------------------------
-  let prevPaid = capBaseAmount;
-  for (let k = 0; k < modelYears.length; k++) {
-    const y = modelYears[k]!;
-    const allowed = prevPaid + mulRate(prevPaid, capPct / 100);
-    const billedPool = Math.min(y.recon.controllable_actual_cents, allowed);
-    y.recon.cap_allowed_cents = allowed;
-    y.recon.cap_billed_cents = billedPool;
-    y.recon.billed_pool_cents = y.recon.pool_total_cents - y.recon.controllable_actual_cents + billedPool;
-    y.recon.tenant_total_cents = mulRate(y.recon.billed_pool_cents, shareFrac);
-    prevPaid = billedPool;
-  }
-
-  for (let k = 0; k < modelYears.length; k++) {
-    const y = modelYears[k]!;
-    const estRng = rng.child("estimate/" + y.year);
-    const estimate = Math.round((y.recon.tenant_total_cents * estRng.float(0.9, 0.98)) / 12);
-    y.estimate_monthly_cents = estimate;
-    y.recon.estimates_paid_cents = estimate * 12;
-    y.recon.balance_due_cents = y.recon.tenant_total_cents - y.recon.estimates_paid_cents;
-  }
-
-  // --- delivery dates and the tenant's account ----------------------------
+  // --- delivery dates ------------------------------------------------------
   const delivery: Record<number, string> = {};
   for (const y of modelYears) {
     const dRng = rng.child("delivery/" + y.year);
     delivery[y.year] = iso(y.year + 1, dRng.int(3, 8), dRng.int(4, 26));
   }
 
-  const ledger = buildLedger(modelYears, lease, delivery, rng.child("ledger"));
-
-  return {
+  const model: ScenarioModel = {
     config,
     universe,
     lease,
@@ -574,10 +551,19 @@ export function buildCleanModel(config: ScenarioConfig): ScenarioModel {
     capital_projects: [capital],
     tax_parcels: parcels,
     insurance,
-    ledger,
+    ledger: [],
     delivery,
     planted: [],
   };
+
+  // The tenant's estimates are set from a first pass at the tenant total, then
+  // held: what the tenant paid monthly is a fact of the year, not something a
+  // later reconciliation reaches back and changes.
+  recomputeRecon(model, rng);
+  setEstimates(model, rng);
+  recomputeRecon(model, rng);
+
+  return model;
 }
 
 function taxGl(parcels: readonly TaxParcel[], universe: Universe, year: number): GLEntry[] {
@@ -650,80 +636,4 @@ function feeGl(universe: Universe, year: number, total: number, label: string): 
     memo: `Management fee accrual — ${monthName(i + 1)} ${year}`,
     amount_cents: amount,
   }));
-}
-
-/**
- * The tenant's account as the landlord keeps it: base rent and the monthly
- * operating-expense estimate charged on the first, the reconciliation true-up
- * charged when the package is delivered, and one payment a month covering what
- * was charged. The balance returns to zero, so a reader can check it by eye.
- */
-function buildLedger(
-  years: readonly ModelYear[],
-  lease: LeaseAbstract,
-  delivery: Record<number, string>,
-  rng: Rng,
-): LedgerEntry[] {
-  interface Row {
-    date: string;
-    period: string;
-    code: LedgerEntry["code"];
-    description: string;
-    charge_cents: number;
-  }
-  const rows: Row[] = [];
-
-  years.forEach((y, k) => {
-    const rentAnnual = Math.round(lease.premises_sf * lease.base_rent_psf_year1 * Math.pow(1 + lease.base_rent_escalation_pct / 100, k) * 100);
-    const rentMonthly = Math.round(rentAnnual / 12);
-    for (let m = 1; m <= 12; m++) {
-      rows.push({ date: iso(y.year, m, 1), period: period(y.year, m), code: "RNT", description: `Base rent — ${monthName(m)} ${y.year}`, charge_cents: rentMonthly });
-      rows.push({
-        date: iso(y.year, m, 1),
-        period: period(y.year, m),
-        code: "EST",
-        description: `Operating expense estimate — ${monthName(m)} ${y.year}`,
-        charge_cents: y.estimate_monthly_cents,
-      });
-    }
-    const d = delivery[y.year]!;
-    rows.push({
-      date: d,
-      period: period(Number(d.slice(0, 4)), Number(d.slice(5, 7))),
-      code: "REC",
-      description: `${y.year} operating expense reconciliation — balance ${y.recon.balance_due_cents >= 0 ? "due" : "credit"}`,
-      charge_cents: y.recon.balance_due_cents,
-    });
-  });
-
-  rows.sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : a.code < b.code ? -1 : 1));
-
-  // One payment a month, a few days after the charges it settles.
-  const byMonth = new Map<string, number>();
-  for (const r of rows) byMonth.set(r.period, (byMonth.get(r.period) ?? 0) + r.charge_cents);
-
-  const out: LedgerEntry[] = [];
-  let balance = 0;
-  const periods = [...byMonth.keys()].sort();
-  for (const p of periods) {
-    for (const r of rows.filter((x) => x.period === p)) {
-      balance += r.charge_cents;
-      out.push({ date: r.date, period: r.period, code: r.code, description: r.description, charge_cents: r.charge_cents, payment_cents: 0, balance_cents: balance });
-    }
-    const due = byMonth.get(p)!;
-    if (due === 0) continue;
-    const last = rows.filter((x) => x.period === p).map((x) => x.date).sort().at(-1)!;
-    const payDate = addDays(last, rng.child("pay/" + p).int(2, 9));
-    balance -= due;
-    out.push({
-      date: payDate,
-      period: p,
-      code: "PAY",
-      description: due >= 0 ? `Payment received — thank you` : `Credit applied`,
-      charge_cents: 0,
-      payment_cents: due,
-      balance_cents: balance,
-    });
-  }
-  return out;
 }
