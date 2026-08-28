@@ -59,9 +59,21 @@ describe("the page can only load itself", () => {
   });
 });
 
-describe("no source file reaches the network", () => {
-  const BANNED = ["fetch(", "XMLHttpRequest", "WebSocket", "EventSource", "sendBeacon", "importScripts", "navigator.connection"];
+const BANNED = ["fetch(", "XMLHttpRequest", "WebSocket", "EventSource", "sendBeacon", "importScripts", "navigator.connection"];
 
+/**
+ * The single module under `src/` allowed to name another application's address.
+ *
+ * The Red-Flag Scanner handoff needs an `href`, and a file interchange nobody
+ * can find is not an interchange. The exception is confined to one module and
+ * pinned below: the host it may name, that it opens nothing itself, and that no
+ * second file quietly grows the same privilege.
+ */
+const CROSS_APP_LINK = "src/ui/scanner-link.ts";
+const posix = (f: string) => relative(root, f).split(/[\\/]/).join("/");
+const stripNamespaces = (t: string) => t.replace(/https?:\/\/(?:schemas\.openxmlformats\.org|purl\.org\/dc)[^"'`\s]*/g, "");
+
+describe("no source file reaches the network", () => {
   it("has source files to scan", () => {
     expect(srcFiles.length).toBeGreaterThan(0);
   });
@@ -81,9 +93,35 @@ describe("no source file reaches the network", () => {
     // .xlsx a .xlsx, written *into* the file the writer produces. Nothing
     // resolves them, and an Office document without them is not readable. This
     // is a local widening of the family's check; the rest of it stands.
+    //
+    // A third exception, and the only one that is a real address: see
+    // CROSS_APP_LINK above, and the tests that fence it in below.
+    if (posix(file) === CROSS_APP_LINK) return;
     const text = readFileSync(file, "utf8");
-    const withoutNamespaces = text.replace(/https?:\/\/(?:schemas\.openxmlformats\.org|purl\.org\/dc)[^"'`\s]*/g, "");
-    expect(/https?:\/\/(?!www\.w3\.org)/.test(withoutNamespaces), `remote host referenced in ${_rel}`).toBe(false);
+    expect(/https?:\/\/(?!www\.w3\.org)/.test(stripNamespaces(text)), `remote host referenced in ${_rel}`).toBe(false);
+  });
+});
+
+describe("the one cross-app link", () => {
+  const text = readFileSync(join(root, CROSS_APP_LINK), "utf8");
+
+  it("names only the scanner, live and local", () => {
+    const hosts = [...text.matchAll(/https?:\/\/([^/"'`\s]+)/g)].map((m) => m[1]!);
+    expect([...new Set(hosts)].sort()).toEqual(["localhost:5173", "scanner.petriumalpha.com"]);
+  });
+
+  it("opens no connection of its own — it only produces an href", () => {
+    const found = BANNED.filter((b) => text.includes(b));
+    expect(found, `network API in ${CROSS_APP_LINK}: ${found.join(", ")}`).toEqual([]);
+    expect(/\blocation\s*\.\s*(?:href|assign|replace)\b/.test(text), "it navigates for you instead of offering a link").toBe(false);
+  });
+
+  it("is the only module under src/ that names a host", () => {
+    const offenders = srcFiles
+      .filter((f) => posix(f) !== CROSS_APP_LINK)
+      .filter((f) => /https?:\/\/(?!www\.w3\.org)/.test(stripNamespaces(readFileSync(f, "utf8"))))
+      .map((f) => posix(f));
+    expect(offenders).toEqual([]);
   });
 });
 

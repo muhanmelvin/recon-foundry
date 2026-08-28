@@ -36,6 +36,7 @@ import { buildPackageZip, packageContents } from "../engine/package/packager.ts"
 import { toScannerManifest } from "../engine/model/answer-key.ts";
 import type { Artifact } from "../engine/render/artifact.ts";
 import { $, clear, h } from "./dom.ts";
+import { scannerUrl } from "./scanner-link.ts";
 
 // ---------------------------------------------------------------------------
 // State
@@ -538,21 +539,69 @@ function downloadsPanel(): HTMLElement {
       ),
     ),
     h("p", { class: "field-hint" }, `${packageContents(model, answerKey).entries.length} documents. The ZIP contains the answer key in a folder of its own — delete that folder before handing the package to anyone who is meant to work it.`),
+    h("h3", {}, "Scan this package"),
     h(
       "div",
       { class: "row" },
-      h("button", { type: "button", class: "ghost", onclick: () => { const a = renderReconPackageJson(model); download(a.filename, a.kind, a.bytes); } }, "ReconPackage (.json)"),
       h(
         "button",
         {
           type: "button",
           class: "ghost",
-          onclick: () => download(`${model.universe.site_code}_findings-manifest.json`, "json", JSON.stringify(toScannerManifest(answerKey), null, 2) + "\n"),
+          onclick: () => {
+            const a = renderReconPackageJson(model);
+            download(a.filename, a.kind, a.bytes);
+          },
         },
-        "Findings manifest (.json)",
+        "Download for the Scanner (.json)",
       ),
+      // A link, not a button: it navigates, and the visitor should be able to
+      // middle-click it. The URL is resolved by src/ui/scanner-link.ts, the one
+      // module in this repo that names a sibling app.
+      h("a", { class: "button-link", href: scannerUrl(), target: "_blank", rel: "noopener noreferrer" }, "Open the Red-Flag Scanner ↗"),
     ),
-    h("p", { class: "field-hint" }, "Those two are what the Red-Flag Scanner reads: the package, and what should be found in it."),
+    h(
+      "p",
+      { class: "field-hint" },
+      "Drop that file on the scanner's ",
+      h("em", {}, "Upload your own"),
+      " card. There is no column-mapping step — the file is already in the shape the scanner reads — and it carries the things a spreadsheet cannot: the landlord's cap ladder, the capital blocks and the statement's own subtotals.",
+    ),
+    model.config.schemes.includes("kept_tax_refund")
+      ? h(
+          "p",
+          { class: "field-hint" },
+          "One scheme planted in this package is invisible to the scanner by design: a kept tax refund is not a fact a reconciliation statement contains, so no check can ask about it. Only the paper catches that one — see the answer key.",
+        )
+      : null,
+    // The package is the input and the manifest is the answers, so training mode
+    // separates them: the JSON above always downloads, the manifest waits until
+    // the answers are asked for. Nothing is silently withheld — the ZIP still
+    // carries the key in its own folder, and the line below says where it is.
+    state.trainingMode
+      ? h(
+          "p",
+          { class: "field-hint" },
+          "The findings manifest — what should be found in this package, in the scanner's own arithmetic — is part of the answers. Turn training mode off to download it here; it is in the ZIP either way.",
+        )
+      : h(
+          "div",
+          {},
+          h(
+            "div",
+            { class: "row" },
+            h(
+              "button",
+              {
+                type: "button",
+                class: "ghost",
+                onclick: () => download(`${model.universe.site_code}_findings-manifest.json`, "json", JSON.stringify(toScannerManifest(answerKey), null, 2) + "\n"),
+              },
+              "Findings manifest (.json)",
+            ),
+          ),
+          h("p", { class: "field-hint" }, "What should be found in the package, in the scanner's own arithmetic. The two files together are a regression fixture: the package, and the truth about it."),
+        ),
 
     h("h3", {}, "Answer key"),
     h(

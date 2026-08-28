@@ -28,6 +28,7 @@
 
 import type { ScenarioModel } from "../model/types.ts";
 import { scenarioId } from "../model/answer-key.ts";
+import { cappedPoolLabel } from "../model/categories.ts";
 import { amortizationForYear } from "../scanner-rules.ts";
 import { termDocumentName } from "../package/filenames.ts";
 import { type Artifact } from "./artifact.ts";
@@ -99,7 +100,7 @@ export function toReconPackage(model: ScenarioModel): unknown {
       ...(lease.cap && y.recon.cap_allowed_cents !== null
         ? {
             cap_summary: {
-              pool_label: `Controllable CAM (subject to ${lease.cap.pct}% cap)`,
+              pool_label: cappedPoolLabel(lease.cap.pct),
               pool_actual: d(y.recon.controllable_actual_cents),
               pool_allowed: d(y.recon.cap_allowed_cents),
               pool_billed: d(y.recon.cap_billed_cents),

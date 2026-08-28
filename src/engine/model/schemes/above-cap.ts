@@ -28,6 +28,7 @@ import type { Rng } from "../../rng.ts";
 import { mulRate } from "../recompute.ts";
 import { avoidRoundAmount } from "../../rng.ts";
 import type { AnswerFinding, ScenarioModel } from "../types.ts";
+import { cappedPoolLabel } from "../categories.ts";
 import type { SchemeResult } from "./index.ts";
 
 export function plantAboveCapBilling(model: ScenarioModel, rng: Rng): SchemeResult {
@@ -96,7 +97,7 @@ export function plantAboveCapBilling(model: ScenarioModel, rng: Rng): SchemeResu
             scheme: "above_cap_billing",
             check_id: "RF-06",
             year,
-            category: "Controllable CAM (subject to cap)",
+            category: cappedPoolLabel(cap.pct),
             severity: "high",
             seam:
               `The ${year} ceiling was grown on what was billed the year before (${(priorBilled / 100).toFixed(2)}), not on what was payable (${(priorPaidCorrect / 100).toFixed(2)}); ` +

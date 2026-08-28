@@ -96,6 +96,19 @@ export function catalogFor(kind: PropertyKind): readonly CategorySpec[] {
   }
 }
 
+/**
+ * The name the capped pool goes by, on the statement and in the answer key.
+ *
+ * One function rather than two string literals because the two have to agree:
+ * the scanner names an RF-06 finding after the `cap_summary.pool_label` it read,
+ * so a manifest that called the pool something else would describe a finding
+ * that never appears. That drift happened once and the scanner-side fixture
+ * test caught it.
+ */
+export function cappedPoolLabel(capPct: number): string {
+  return `Controllable CAM (subject to ${capPct}% cap)`;
+}
+
 /** Every category label the catalog can produce, for the keyword-safety test. */
 export function allCategoryLabels(): string[] {
   return [...RETAIL, ...OFFICE, ...FLEX].map((c) => c.category);

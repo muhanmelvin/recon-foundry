@@ -19,5 +19,5 @@ export default defineConfig({
     sourcemap: false,
     assetsInlineLimit: single ? 100_000_000 : 4096,
   },
-  server: { port: 5173 },
+  server: { port: 5174 },
 });
