@@ -17,13 +17,19 @@
  * comes to less than the tax line. The collector's account statement is the only
  * document in the package that mentions the refund at all.
  *
- * **No scanner check catches this.** Verified against the Red-Flag Scanner's
- * twelve checks: none reads a refund or a credit, and the ReconPackage schema has
- * no field that could carry one — a reconciliation statement, on its own, simply
- * does not contain the fact. So the answer key records it with `check_id: null`,
- * the scanner-facing manifest leaves it out, and the README says plainly that it
- * is the argument for a future RF-13. It is also the best of the five to teach
- * with, for the same reason: only the paper catches it.
+ * **This scheme is why RF-13 exists.** For the life of this repo no scanner
+ * check could catch it: none of the twelve read a refund or a credit, and the
+ * ReconPackage schema had no field that could carry one — a reconciliation
+ * statement, on its own, simply does not contain the fact. The answer key
+ * recorded it with `check_id: null` and the manifest left it out, as a declared
+ * gap rather than a hidden one. Schema 1.1 closed it: the package now carries
+ * the collector's account as `tax_backup`, and RF-13 nets it against the tax
+ * line. The finding is `RF-13` from here on.
+ *
+ * **What has not changed** is which document betrays it. Only the paper and the
+ * ReconPackage JSON carry the credit; a workbook upload has nowhere to put a
+ * tax backup, so a landlord's spreadsheet still hides this scheme completely.
+ * That is what keeps it the best of the five to teach with.
  */
 
 import type { Rng } from "../../rng.ts";
@@ -60,7 +66,7 @@ export function plantKeptTaxRefund(model: ScenarioModel, rng: Rng): SchemeResult
       findings: [
         {
           scheme: "kept_tax_refund",
-          check_id: null,
+          check_id: "RF-13",
           year,
           category: "Real estate taxes",
           severity: "high",
@@ -71,7 +77,7 @@ export function plantKeptTaxRefund(model: ScenarioModel, rng: Rng): SchemeResult
             'Reconciliation summary, line "Real estate taxes"',
             "Lease §6.06 (taxes are net of refunds, abatements and credits)",
           ],
-          note: "No Red-Flag Scanner check sees this: a reconciliation statement does not carry the fact that a refund exists. Only the tax backup does.",
+          note: "RF-13 sees this only through the tax backup the ReconPackage JSON carries. A workbook upload cannot: a reconciliation statement does not contain the fact that a refund exists.",
           cofires: [],
         },
       ],

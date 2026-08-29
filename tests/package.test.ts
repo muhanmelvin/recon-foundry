@@ -126,11 +126,15 @@ describe("the ZIP is the package a trainer hands out", () => {
     expect(zip.filename).toMatch(/^[A-Z]{2,3}\d_\d{4}-\d{4} OPEX RECON PACKAGE\.zip$/);
   });
 
-  it("has an answer sheet that says which findings a scanner would miss", () => {
+  it("has an answer sheet that names the check behind each finding", () => {
+    // All five schemes have a check now: RF-13 closed the kept refund, the last
+    // one that had none. The sheet's other stamp — "Only the paper catches
+    // this" — is still what an unseeable finding renders as, and the day another
+    // one is planted this is where it reappears.
     const { entries: contents } = packageContents(model, answerKey);
     const sheet = contents.find((e) => e.artifact.title === "Answer key")!.artifact.bytes as string;
-    expect(sheet).toContain("Only the paper catches this");
-    expect(sheet).toContain("The scanner catches this");
+    expect(sheet).not.toContain("Only the paper catches this");
+    expect(sheet).toContain("The scanner catches this — RF-13");
     expect(sheet).toContain(answerKey.seed);
     expect(sheet).toContain("Delete this folder");
   });

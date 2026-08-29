@@ -23,7 +23,7 @@ export type SchemeId =
   | "above_cap_billing" //   → RF-06
   | "fee_base_expansion" //  → RF-07
   | "bucket_migration" //    → RF-04 (with RF-02 and RF-03)
-  | "kept_tax_refund"; //    → nothing: only the tax backup betrays it
+  | "kept_tax_refund"; //    → RF-13, and only through the tax backup the JSON carries
 
 /** Canonical order. `applySchemes` follows it, so a combination is deterministic. */
 export const SCHEME_ORDER: readonly SchemeId[] = Object.freeze([

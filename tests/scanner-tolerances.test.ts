@@ -2,7 +2,7 @@
  * "Clean" here means something stricter than "the arithmetic works": it means
  * the Red-Flag Scanner, pointed at this package, finds *nothing at all*.
  *
- * That is a promise about twelve checks the scanner runs, and it is easy to
+ * That is a promise about thirteen checks the scanner runs, and it is easy to
  * break by accident — a category renamed to something with "parking" in it, a
  * per-square-foot rate that lands a pool on a round $18,000, a growth range
  * widened past the scanner's 15% question. Each test below pins one of those
@@ -18,7 +18,8 @@
 import { describe, expect, it } from "vitest";
 import { buildCleanModel } from "../src/engine/model/clean.ts";
 import { allCategoryLabels } from "../src/engine/model/categories.ts";
-import { isRoundPoolAmount, looksCapital, normalizeLabel } from "../src/engine/scanner-rules.ts";
+import { isRoundPoolAmount, isScannerTaxLine, looksCapital, normalizeLabel } from "../src/engine/scanner-rules.ts";
+import { toReconPackage } from "../src/engine/render/recon-package.ts";
 import type { ScenarioModel } from "../src/engine/model/types.ts";
 import { sweep } from "./helpers/sweep.ts";
 
@@ -173,6 +174,40 @@ describe("RF-09 — nothing capital is expensed in a lump", () => {
         expect(p.amount_cents).not.toBe(q.amount_cents);
         expect(Math.abs((p.amount_cents - q.amount_cents) / q.amount_cents)).toBeLessThan(0.15);
       }
+    }
+  });
+});
+
+describe("RF-13 — the tax backup nets against exactly the lines the scanner calls tax", () => {
+  // The drift surface RF-13 created. The exported `tax_backup` covers the
+  // parcels; RF-13 subtracts it from whatever *the scanner* reads as a tax line.
+  // If those two populations ever stop being the same set of lines, a clean
+  // package grows a tax finding out of nothing — so the identity is pinned here
+  // rather than discovered in the scanner repo.
+  interface ExportedYear {
+    year: number;
+    lines: Array<{ label: string; section: string; amount: number; is_fee?: boolean; capital?: unknown }>;
+    tax_backup?: { parcels: Array<{ billed: number; credits?: Array<{ amount: number }> }> };
+  }
+
+  it.each(MODELS)("%s: the scanner's tax lines are the Taxes section, and nothing else", (_seed, model) => {
+    const years = (toReconPackage(model) as { years: ExportedYear[] }).years;
+    for (const y of years) {
+      const scannerSees = y.lines.filter((l) => isScannerTaxLine(l)).map((l) => l.label).sort();
+      const taxSection = y.lines.filter((l) => l.section === "Taxes").map((l) => l.label).sort();
+      expect(scannerSees, `${y.year}: the scanner's tax population is not the Taxes section`).toEqual(taxSection);
+      expect(scannerSees.length).toBeGreaterThan(0);
+    }
+  });
+
+  it.each(MODELS)("%s: every year carries a backup that nets to the tax line, to the cent", (_seed, model) => {
+    const years = (toReconPackage(model) as { years: ExportedYear[] }).years;
+    for (const y of years) {
+      expect(y.tax_backup, `${y.year}: no tax backup exported — RF-13 would skip instead of running clean`).toBeDefined();
+      const levy = y.tax_backup!.parcels.reduce((s, p) => s + Math.round(p.billed * 100), 0);
+      const credits = y.tax_backup!.parcels.reduce((s, p) => s + (p.credits ?? []).reduce((t, c) => t + Math.round(c.amount * 100), 0), 0);
+      const billed = y.lines.filter((l) => isScannerTaxLine(l)).reduce((s, l) => s + Math.round(l.amount * 100), 0);
+      expect(billed, `${y.year}: the statement's tax lines do not equal the netted backup`).toBe(levy - credits);
     }
   });
 });

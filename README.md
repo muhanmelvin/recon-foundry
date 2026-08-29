@@ -71,20 +71,27 @@ finding the real thing.
 | The cap grown on the cap | T7 | RF-06 |
 | A fee on a base the lease forbids | T7 | RF-07 |
 | A cost moved out of the capped pool | T7 | RF-04, with RF-02 and RF-03 |
-| **A tax refund kept** | **T4** | **nothing** |
+| **A tax refund kept** | **T4** | **RF-13 — but only from the JSON** |
 
 Four of the five are visible only by reading the lease: the arithmetic is right
 and the entitlement is wrong. The fifth is the opposite, and it is the one worth
 pointing at.
 
-**No Red-Flag Scanner check catches a kept tax refund.** None of its twelve
-checks reads a refund or a credit, and the ReconPackage schema has no field that
-could carry one — because a reconciliation statement, on its own, simply does not
-contain the fact that a refund exists. Only the county's account statement does.
-So the answer key records that finding with `check_id: null`, the scanner-facing
-manifest leaves it out, and this is the motivating case for a future **RF-13,
-"tax backup tie-out"**. It is also the best of the five to teach with, for
-exactly the same reason: only the paper catches it.
+**RF-13 exists because of the kept tax refund.** For most of this repo's life no
+scanner check could catch it: none of the twelve read a refund or a credit, and
+the ReconPackage schema had no field that could carry one — because a
+reconciliation statement, on its own, simply does not contain the fact that a
+refund exists. Only the county's account statement does. So the answer key
+recorded that finding with `check_id: null` and the manifest left it out, as a
+gap declared rather than hidden, and the README named the check that would close
+it. Schema **1.1** did: every exported package now carries the collector's
+account as a per-year `tax_backup` — the levy as issued, and the credits granted
+against it — and the scanner's **RF-13** nets the two.
+
+What has not changed is which document betrays it. Upload the workbook instead of
+the JSON and the scheme is invisible again, because a spreadsheet has nowhere to
+put a tax backup. It is still the best of the five to teach with, for exactly
+that reason: only the paper catches it.
 
 ## Same seed, same bytes
 

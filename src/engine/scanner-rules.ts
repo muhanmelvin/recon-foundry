@@ -11,8 +11,9 @@
  * appear, because the scanner is the authority and this file is the echo.
  *
  * Sources: `red-flag-scanner/src/engine/checks/rf05_round.ts` (`isRoundAmount`),
- * `red-flag-scanner/src/engine/lines.ts` (`CAPITAL_KEYWORDS`, `looksCapital`),
- * and `src/engine/normalize.ts` (`normalizeLabel`), at commit c050bad.
+ * `red-flag-scanner/src/engine/lines.ts` (`CAPITAL_KEYWORDS`, `looksCapital`,
+ * `TAX_RE`), and `src/engine/normalize.ts` (`normalizeLabel`), at commit c050bad
+ * — plus `TAX_RE` again at the commit that added RF-13.
  */
 
 /** RF-05's round-number test, at the scanner's default $5,000 minimum. */
@@ -114,6 +115,30 @@ const FEE_RE = /\b(management|administrative|admin|supervisory|overhead|asset ma
 const FEE_SECTION_RE = /^(fees?|management|administrative)( fees?)?$/;
 const TAX_RE = /\btax(es)?\b|\bassessments?\b/;
 const INS_RE = /\binsurance\b|\bpremiums?\b/;
+
+/**
+ * The lines RF-13 will net the tax backup against.
+ *
+ * This is the drift surface RF-13 created. The tax backup a forged package
+ * exports covers the parcels — the levy as issued, less any credit — and the
+ * scanner subtracts that from whatever *it* reads as a tax line. If the two
+ * populations ever stop being the same set of lines, a clean package acquires a
+ * tax finding out of nowhere, or a planted refund stops being findable. So the
+ * regex lives here as a copy and `tests/scanner-tolerances.test.ts` asserts that
+ * the lines it selects in an exported package are exactly the lines the backup
+ * is built from.
+ *
+ * Source: `red-flag-scanner/src/engine/lines.ts` (`TAX_RE`, `lineKind`) — note
+ * the precedence there: a fee line is a fee first, and an amortization line is
+ * capital first, whatever their captions say.
+ */
+export function isScannerTaxLine(line: { label: string; section: string; is_fee?: boolean; capital?: unknown }): boolean {
+  const label = normalizeLabel(line.label);
+  const section = normalizeLabel(line.section);
+  if (line.is_fee || FEE_RE.test(label) || FEE_SECTION_RE.test(section)) return false;
+  if (line.capital) return false;
+  return TAX_RE.test(section) || TAX_RE.test(label);
+}
 
 /**
  * The base RF-07 will compute a `cam_only` fee on, given the lines as the

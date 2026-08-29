@@ -102,22 +102,28 @@ describe("the answer key is derived from the finished package", () => {
     }
   });
 
-  it("records the kept refund as a finding no check can raise", () => {
+  it("records the kept refund as RF-13, the check the tax backup made possible", () => {
+    // It was `check_id: null` until schema 1.1 gave the package somewhere to
+    // carry the collector's account. Nothing about the scheme changed — the
+    // scanner learned to read the document that always betrayed it.
     const { answerKey } = forge(withSchemes(BASES[0]!, ["kept_tax_refund"]));
     expect(answerKey.findings).toHaveLength(1);
-    expect(answerKey.findings[0]!.check_id).toBeNull();
-    expect(answerKey.expected_scanner.document_only).toBe(1);
+    expect(answerKey.findings[0]!.check_id).toBe("RF-13");
+    expect(answerKey.findings[0]!.expected_impact_range![0]).toBeGreaterThan(0);
+    expect(answerKey.expected_scanner.document_only).toBe(0);
     expect(answerKey.total_planted_tenant_impact_cents).toBeGreaterThan(0);
   });
 });
 
 describe("the manifest is what the scanner can actually be held to", () => {
-  it("leaves out the findings no check can raise", () => {
+  it("carries every finding a check can raise, the kept refund included", () => {
     const { answerKey } = forge(withSchemes(BASES[0]!, [...SCHEME_ORDER]));
     const manifest = toScannerManifest(answerKey) as { findings: Array<{ check_id: string }>; document_only_findings: number; cofires: string[] };
     expect(manifest.findings.every((f) => f.check_id !== null)).toBe(true);
-    expect(manifest.findings.length).toBeLessThan(answerKey.findings.length);
-    expect(manifest.document_only_findings).toBe(1);
+    expect(manifest.findings.map((f) => f.check_id)).toContain("RF-13");
+    // Zero since RF-13 landed. The count stays in the format: it is how the
+    // *next* scheme no check can see gets declared instead of hidden.
+    expect(manifest.document_only_findings).toBe(0);
   });
 
   it("names the checks that fire as a consequence, so a test can tell them from surprises", () => {

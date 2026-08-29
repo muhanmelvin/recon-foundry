@@ -22,6 +22,13 @@
  * and a landlord charging it in the year it was spent, and it is what lets the
  * scanner tell them apart.
  *
+ * **The tax backup is the levy as issued, gross of any credit** (schema 1.1).
+ * Netting a refund into `billed` here would destroy the only signal RF-13 has;
+ * the credit travels as its own entry, exactly as the collector's account shows
+ * it. Every package carries the block, clean ones included — a clean package
+ * has to be invisible to RF-13 *running*, which is a stronger statement than
+ * being invisible to RF-13 skipped.
+ *
  * Amounts are dollars here, not cents: the schema says so, and this is the
  * boundary where the engine's integer cents turn back into money.
  */
@@ -49,7 +56,7 @@ export function toReconPackage(model: ScenarioModel): unknown {
       tenant_name: u.tenant_name,
       premises_sf: lease.premises_sf,
       currency: "USD",
-      schema_version: "1.0",
+      schema_version: "1.1",
       story: storyOf(model),
     },
     lease_lite: {
@@ -113,8 +120,36 @@ export function toReconPackage(model: ScenarioModel): unknown {
         estimates_paid: d(y.recon.estimates_paid_cents),
         balance_due: d(y.recon.balance_due_cents),
       },
+      ...taxBackupFor(model, y.year),
     })),
   };
+}
+
+/** The collector's account for one year, in the scanner's schema-1.1 shape. */
+function taxBackupFor(model: ScenarioModel, year: number): { tax_backup?: unknown } {
+  const parcels = model.tax_parcels.flatMap((parcel) => {
+    const py = parcel.years.find((x) => x.year === year);
+    if (!py) return [];
+    return [
+      {
+        parcel_id: parcel.parcel_id,
+        billed: d(py.installments.reduce((s, i) => s + i.amount_cents, 0)),
+        ...(py.credit
+          ? {
+              credits: [
+                {
+                  amount: d(py.credit.amount_cents),
+                  appeal_year: py.credit.appeal_year,
+                  granted: py.credit.granted,
+                  reference: py.credit.docket,
+                },
+              ],
+            }
+          : {}),
+      },
+    ];
+  });
+  return parcels.length > 0 ? { tax_backup: { parcels } } : {};
 }
 
 function storyOf(model: ScenarioModel): string {

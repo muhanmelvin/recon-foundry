@@ -45,9 +45,9 @@ const DEFAULT_OUT = resolve(root, "..", "red-flag-scanner", "tests", "fixtures",
 /**
  * Three packages, chosen for what they make the scanner do rather than for
  * variety: one that must produce nothing at all, one that exercises the cap
- * ladder and a line changing pools, and one carrying every scheme — including
- * the kept tax refund, which no check can see and which the manifest therefore
- * declares as document-only rather than expecting a finding for.
+ * ladder and a line changing pools, and one carrying every scheme — the kept
+ * tax refund included, which since schema 1.1 travels with its tax backup and
+ * is expected as an RF-13 finding rather than declared document-only.
  */
 const FIXTURES = [
   {
@@ -62,7 +62,7 @@ const FIXTURES = [
   },
   {
     name: "all-five",
-    note: "Every scheme at once, kept tax refund included — which is document-only and must raise nothing.",
+    note: "Every scheme at once, kept tax refund included — which RF-13 now raises off the tax backup.",
     config: {
       seed: "fixture-five-1",
       start_year: 2023,
@@ -113,7 +113,7 @@ writeFileSync(
     "and the truth about it: `*.package.json` is the ReconPackage the scanner reads,",
     "`*.manifest.json` is what should be found in it, in the scanner's own arithmetic.",
     "",
-    "They exist to catch drift. Recon Foundry carries **copies** of five of this",
+    "They exist to catch drift. Recon Foundry carries **copies** of several of this",
     "engine's rules in `src/engine/scanner-rules.ts` — the family forbids one app",
     "importing another — and when a check here changes without those copies",
     "following, `tests/foundry.test.ts` is what notices.",

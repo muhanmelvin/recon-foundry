@@ -70,7 +70,7 @@ const SCHEME_COPY: Record<SchemeId, { title: string; blurb: string }> = {
   },
   kept_tax_refund: {
     title: "A tax refund kept",
-    blurb: "Only the collector's account statement shows it. No scanner check can see this one.",
+    blurb: "Only the collector's account statement shows it. RF-13 reads that backup; a workbook cannot carry one.",
   },
 };
 
@@ -571,7 +571,7 @@ function downloadsPanel(): HTMLElement {
       ? h(
           "p",
           { class: "field-hint" },
-          "One scheme planted in this package is invisible to the scanner by design: a kept tax refund is not a fact a reconciliation statement contains, so no check can ask about it. Only the paper catches that one — see the answer key.",
+          "One scheme planted here — the kept tax refund — is only findable through the tax backup this JSON carries: the collector's account, with the levy as issued and the credit against it. The scanner's RF-13 reads exactly that. Upload the workbook instead and the same scheme is invisible, because a reconciliation statement does not contain the fact that a refund exists.",
         )
       : null,
     // The package is the input and the manifest is the answers, so training mode

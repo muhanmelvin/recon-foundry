@@ -64,7 +64,12 @@ export interface AnswerKey {
     clean: boolean;
     /** The number of `high` findings the scanner should raise at least. */
     high_min: number;
-    /** Findings only the documents reveal — the scanner cannot see these. */
+    /**
+     * Findings only the documents reveal — the scanner cannot see these. Zero
+     * for all five schemes since RF-13 learned to read the tax backup; the
+     * count stays in the format because it is how the *next* invisible scheme
+     * gets declared rather than hidden.
+     */
     document_only: number;
   };
 }
@@ -223,7 +228,11 @@ function fillExpectedRanges(model: ScenarioModel, findings: AnswerFinding[], led
         const firstInstalment = Math.round(line.amount_cents / model.lease.capital_life_years);
         f.expected_impact_range = band(mulRate(line.amount_cents - firstInstalment, shareFrac));
       }
-    } else if (f.check_id === null) {
+    } else if (f.check_id === "RF-13") {
+      // RF-13 nets the backup the same way the truth ledger does — the levy as
+      // issued, less the credits the collector's account shows — so the
+      // scanner's estimate and the answer key's are the same arithmetic on the
+      // same figures, and the band is only there for the rounding.
       f.expected_impact_range = band(mulRate(truth.tax_billed - truth.tax_correct, shareFrac));
     }
   }
