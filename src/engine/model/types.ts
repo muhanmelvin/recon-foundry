@@ -44,6 +44,35 @@ export interface ScenarioConfig {
   size_band: SizeBand;
   /** Empty means clean: every tie holds and the scanner finds nothing. */
   schemes: SchemeId[];
+  /**
+   * The tenant's own square footage, when someone has one in mind. Absent, it is
+   * drawn from `size_band` the way it always was — and a config that omits both
+   * this and `opex_psf_target` forges byte-for-byte what it forged before they
+   * existed, which `tests/describe-regression.test.ts` holds.
+   *
+   * Supplying it inverts the derivation rather than overriding it: the property
+   * grows around the premises, because tie T7 requires the billed share to be
+   * exactly premises ÷ denominator. See `resolveFootprint` in `clean.ts`.
+   */
+  premises_sf?: number;
+  /**
+   * What a year of operating expenses should come to per square foot. The
+   * generator scales the *inputs* it draws amounts from until the pool lands
+   * near this; it never scales a finished figure, because a scaled figure can
+   * land back on a round number the scanner would ask about.
+   */
+  opex_psf_target?: number;
+  /**
+   * The caption the package carries, when someone would rather write their own
+   * than take the one the engine composes from the planted schemes.
+   *
+   * It is the only free text in a `ScenarioConfig` besides the seed, and the
+   * only string a human wrote that reaches a forged document — which is why
+   * `bounds.ts` holds it to a caption's length and refuses a name the family's
+   * other apps have already spoken for. Everything else in the package is drawn
+   * from the seeded name bank and could not carry a real name if it tried.
+   */
+  story?: string;
 }
 
 export interface Address {

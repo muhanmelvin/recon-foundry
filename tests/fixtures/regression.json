@@ -1,0 +1,59 @@
+{
+  "note": "Captured before the describe-your-business work. Regenerate only on a deliberate change to forged output.",
+  "configs": [
+    {
+      "name": "default",
+      "config": {
+        "seed": "ashford-1",
+        "start_year": 2023,
+        "year_count": 3,
+        "property_kind": "retail_strip",
+        "size_band": "medium",
+        "schemes": [
+          "above_cap_billing",
+          "fee_base_expansion"
+        ]
+      },
+      "package_sha256": "d9ddc30767c95e9e896dcf18844a62aec274437aea2ed2900e21bff679282466",
+      "zip_filename": "SM1_2023-2025 OPEX RECON PACKAGE.zip",
+      "zip_sha256": "19a9c785d80c053b140cac62a8cd2769fd1bc75db13c7b391c5aec80b800adb5",
+      "zip_bytes": 561257
+    },
+    {
+      "name": "clean-office",
+      "config": {
+        "seed": "regress-office-1",
+        "start_year": 2022,
+        "year_count": 2,
+        "property_kind": "office",
+        "size_band": "small",
+        "schemes": []
+      },
+      "package_sha256": "49a5c08b90f73839e8c2b5cb966eae6c7d6a5f436ab30eb15c7eb4daa89a4299",
+      "zip_filename": "UCC1_2022-2023 OPEX RECON PACKAGE.zip",
+      "zip_sha256": "ab13f3f0cbf2d71153ae0cd9de8144f837f3d8b801a28ad975bc1fa56873a651",
+      "zip_bytes": 362555
+    },
+    {
+      "name": "flex-all-five",
+      "config": {
+        "seed": "regress-flex-1",
+        "start_year": 2024,
+        "year_count": 3,
+        "property_kind": "industrial_flex",
+        "size_band": "large",
+        "schemes": [
+          "unamortized_capital",
+          "above_cap_billing",
+          "fee_base_expansion",
+          "bucket_migration",
+          "kept_tax_refund"
+        ]
+      },
+      "package_sha256": "40403be7c5bd1b28059c1d0d663dc148a8c9b4357140c7dc4b6823e23b08076f",
+      "zip_filename": "DDC8_2024-2026 OPEX RECON PACKAGE.zip",
+      "zip_sha256": "99af49212f4a2f27b673070dd060532a7872d0f609df59ccab0cd2f5c6504a03",
+      "zip_bytes": 535927
+    }
+  ]
+}

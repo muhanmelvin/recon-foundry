@@ -17,6 +17,18 @@ Read this before changing anything in a repo built from `app-starter`.
 - `gates/`, `scripts/` — the client-data gates. See `gates/README.md`.
 - `tests/` — the specification. New behaviour means new tests in a new file.
 
+## Limits on what a visitor may supply
+
+This repo is the first in the family to take a number from a user, so it sets the
+convention. `src/engine/model/bounds.ts` is the single home for every bound —
+read by the `forge()` boundary, by the pinned prompt in `src/engine/describe/`,
+and by the draft validator beside it. **The engine is the gate.** An input's
+`min`/`max` is a courtesy that happens to agree with it, and a pasted draft never
+sees the markup at all. Don't add a second copy of a bound; add it there.
+
+The prose a visitor types is never an engine input, never stored, and never part
+of a forged package — see `docs/adr/0004-describe-maps-to-parameters-only.md`.
+
 ## Non-negotiables
 
 1. **Nothing leaves the browser.** No network calls, no analytics inside an app,

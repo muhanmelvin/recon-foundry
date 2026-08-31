@@ -28,6 +28,16 @@ import "./styles.css";
 import { forge, type Scenario } from "../engine/forge.ts";
 import { checkTies, TIE_STATEMENTS, TIE_TITLES } from "../engine/model/ties.ts";
 import { SCHEME_ORDER, type PropertyKind, type ScenarioConfig, type SchemeId, type SizeBand, type TieId } from "../engine/model/types.ts";
+import {
+  OPEX_PSF_MAX,
+  OPEX_PSF_MIN,
+  PREMISES_SF_MAX,
+  PREMISES_SF_MIN,
+  STORY_MAX_CHARS,
+  validateScenarioConfig,
+} from "../engine/model/bounds.ts";
+import { buildDescribePrompt, countWords, MAX_DESCRIPTION_CHARS, MAX_DESCRIPTION_WORDS } from "../engine/describe/prompt.ts";
+import { DRAFT_FIELD_NAMES, FIELD_LABELS, validateForgeDraft, type DraftValidation, type ForgeDraft } from "../engine/describe/validate.ts";
 import { renderAmortizationWorkbook, renderReconWorkbook, renderTenantLedger } from "../engine/render/workbook.ts";
 import { renderBillingStatement, renderInsuranceBackup, renderLease, renderProjectBackup, renderTaxBackup } from "../engine/render/documents.ts";
 import { renderAnswerSheet } from "../engine/render/answer-sheet.ts";
@@ -42,6 +52,18 @@ import { scannerUrl } from "./scanner-link.ts";
 // State
 // ---------------------------------------------------------------------------
 
+interface DescribeState {
+  open: boolean;
+  /** What the visitor wrote. Never leaves the page, never reaches the engine. */
+  description: string;
+  /** What their AI handed back. */
+  paste: string;
+  /** The last verdict on that paste, or null before they have asked for one. */
+  result: DraftValidation | null;
+  /** The draft currently reflected in the controls, kept for its quotes. */
+  applied: ForgeDraft | null;
+}
+
 interface State {
   config: ScenarioConfig;
   scenario: Scenario;
@@ -49,6 +71,14 @@ interface State {
   sheet: string;
   year: number;
   trainingMode: boolean;
+  describe: DescribeState;
+  /**
+   * Why the last edit did not forge. The bounds live in the engine, so a value
+   * the panel's own min/max would have allowed can still be refused — and when
+   * it is, the controls keep showing what the visitor typed rather than
+   * silently snapping back to the config that is still in force.
+   */
+  configError: string | null;
 }
 
 const SCHEME_COPY: Record<SchemeId, { title: string; blurb: string }> = {
@@ -103,14 +133,43 @@ const state: State = (() => {
     sheet: "ReconciliationSummary",
     year: scenario.model.years[scenario.model.years.length - 1]!.year,
     trainingMode: true,
+    describe: { open: false, description: "", paste: "", result: null, applied: null },
+    configError: null,
   };
 })();
 
 function reforge(): void {
+  // `forge` refuses a configuration outside its bounds, and refusing is the
+  // correct behaviour — but a thrown error in a click handler would leave the
+  // page showing a package that no longer matches its own controls. Catch it,
+  // say what is wrong, and keep the last good scenario on screen.
+  const errors = validateScenarioConfig(state.config);
+  if (errors.length > 0) {
+    state.configError = errors.join(" ");
+    renderAll();
+    return;
+  }
+  state.configError = null;
   state.scenario = forge(state.config);
   const years = state.scenario.model.years.map((y) => y.year);
   if (!years.includes(state.year)) state.year = years[years.length - 1]!;
   renderAll();
+}
+
+/** Clipboard, with the button itself as the only feedback surface. */
+function copyText(text: string, button: HTMLButtonElement): void {
+  navigator.clipboard
+    .writeText(text)
+    .then(() => {
+      const old = button.textContent;
+      button.textContent = "Copied.";
+      setTimeout(() => {
+        button.textContent = old;
+      }, 1200);
+    })
+    .catch(() => {
+      button.textContent = "Select the box and copy manually";
+    });
 }
 
 // ---------------------------------------------------------------------------
@@ -161,6 +220,30 @@ function select<T extends string>(value: T, options: Array<[T, string]>, onChang
     if (v === value) opt.selected = true;
     el.appendChild(opt);
   }
+  return el;
+}
+
+/**
+ * A number the visitor may leave blank, because blank is a real answer here: it
+ * means "you choose", and the generator draws it the way it always did. So the
+ * handler deletes the key rather than writing a zero — an optional field that
+ * has been set to nothing is not the same as an optional field that is absent,
+ * and only the second one forges the package it used to.
+ */
+function optionalNumber(
+  value: number | undefined,
+  attrs: Record<string, string | number>,
+  onSet: (v: number | undefined) => void,
+): HTMLInputElement {
+  const el = h("input", {
+    type: "number",
+    value: value === undefined ? "" : String(value),
+    ...attrs,
+    onchange: (e: Event) => {
+      const raw = (e.target as HTMLInputElement).value.trim();
+      onSet(raw === "" ? undefined : Number(raw));
+    },
+  }) as HTMLInputElement;
   return el;
 }
 
@@ -228,7 +311,43 @@ function forgePanel(): HTMLElement {
       field("Size", select(state.config.size_band, Object.entries(BAND_LABEL) as Array<[SizeBand, string]>, (v) => { state.config.size_band = v; reforge(); })),
       field("First year", select(String(state.config.start_year), (["2021", "2022", "2023", "2024"] as const).map((y) => [y, y] as [string, string]), (v) => { state.config.start_year = Number(v); reforge(); })),
       field("Years", select(String(state.config.year_count), [["2", "Two"], ["3", "Three"]] as Array<[string, string]>, (v) => { state.config.year_count = Number(v) as 2 | 3; reforge(); })),
+      field(
+        "Your square footage",
+        optionalNumber(state.config.premises_sf, { min: PREMISES_SF_MIN, max: PREMISES_SF_MAX, step: 100, placeholder: "drawn from the size" }, (v) => {
+          if (v === undefined) delete state.config.premises_sf;
+          else state.config.premises_sf = Math.round(v);
+          reforge();
+        }),
+        `Leave it blank and the size band draws one. ${PREMISES_SF_MIN.toLocaleString("en-US")}–${PREMISES_SF_MAX.toLocaleString("en-US")} sf; the property grows around it so the billed share still reproduces.`,
+      ),
+      field(
+        "Operating expenses / sf",
+        optionalNumber(state.config.opex_psf_target, { min: OPEX_PSF_MIN, max: OPEX_PSF_MAX, step: "0.01", placeholder: "whatever it costs" }, (v) => {
+          if (v === undefined) delete state.config.opex_psf_target;
+          else state.config.opex_psf_target = Math.round(v * 100) / 100;
+          reforge();
+        }),
+        `A year of expenses per square foot, $${OPEX_PSF_MIN.toFixed(2)}–$${OPEX_PSF_MAX.toFixed(2)}. The invoices are still drawn one by one; this only says how big they should come to.`,
+      ),
     ),
+    field(
+      "Story",
+      h("input", {
+        type: "text",
+        value: state.config.story ?? "",
+        maxlength: STORY_MAX_CHARS,
+        placeholder: "the engine writes one from the schemes",
+        "aria-label": "Story",
+        onchange: (e: Event) => {
+          const v = (e.target as HTMLInputElement).value.trim();
+          if (v === "") delete state.config.story;
+          else state.config.story = v;
+          reforge();
+        },
+      }),
+      `One line, at most ${STORY_MAX_CHARS} characters. It rides along in the package the scanner reads.`,
+    ),
+    state.configError ? h("p", { class: "error-box" }, state.configError) : null,
     h("h3", {}, "What the landlord did wrong"),
     h("p", { class: "field-hint" }, "Leave them all unchecked for a clean package: every figure ties, and there is nothing to find."),
     ...schemeBoxes,
@@ -244,6 +363,199 @@ function forgePanel(): HTMLElement {
       `Forged: ${u.property_name}, ${u.address.city}, ${u.address.state} — ${u.tenant_name}, ${years[0]}–${years[years.length - 1]}.`,
     ),
   );
+}
+
+// ---------------------------------------------------------------------------
+// Describe it instead
+// ---------------------------------------------------------------------------
+
+/**
+ * The AI step, shaped the way the family's CSP requires: prompt out, JSON back.
+ * This page calls nothing. The visitor copies a prompt into the AI they already
+ * use, brings the answer back, and a hand-rolled validator decides whether it
+ * may touch the controls.
+ *
+ * The thing worth noticing about this panel is how little the AI is trusted
+ * with. It cannot write an amount, name a property or author a document; it
+ * fills in at most seven knobs and suggests some schemes, and every one of them
+ * arrives with the words it was read from, displayed beside the control it
+ * filled. Nothing is applied silently and nothing is forged until the visitor
+ * presses the same button they would have pressed anyway.
+ *
+ * The description itself goes nowhere. It is not stored, not exported, not part
+ * of the package. See docs/adr/0004.
+ */
+function describePanel(): HTMLElement {
+  const d = state.describe;
+
+  const counter = h("span", { class: "field-hint" }) as HTMLSpanElement;
+  const copyBtn = h("button", { type: "button", class: "ghost" }, "Copy the prompt") as HTMLButtonElement;
+  const promptBox = h("textarea", {
+    class: "prompt-box mono",
+    readonly: true,
+    rows: "8",
+    "aria-label": "The configuration prompt",
+  }) as HTMLTextAreaElement;
+
+  function refresh(): void {
+    const words = countWords(d.description);
+    const over = words > MAX_DESCRIPTION_WORDS;
+    counter.textContent = `${words} / ${MAX_DESCRIPTION_WORDS} words${over ? " — too long to build a prompt from" : ""}`;
+    counter.className = "field-hint" + (over ? " over" : "");
+    copyBtn.disabled = words === 0 || over;
+    promptBox.value = words === 0 ? "" : buildDescribePrompt(d.description);
+  }
+
+  const descBox = h("textarea", {
+    class: "describe-box",
+    rows: "6",
+    maxlength: MAX_DESCRIPTION_CHARS,
+    placeholder:
+      "We lease 40,000 square feet in a suburban retail centre. Operating expenses run about $9.50 a foot. Last year the landlord charged us for repaving the whole parking lot in one go, and the management fee looks like it is being taken on the taxes as well.",
+    "aria-label": "Describe your business",
+    oninput: (e: Event) => {
+      // Deliberately not a re-render: redrawing the page under a textarea takes
+      // the cursor with it. The three things that depend on this value are
+      // updated in place instead.
+      d.description = (e.target as HTMLTextAreaElement).value;
+      refresh();
+    },
+  }) as HTMLTextAreaElement;
+  descBox.value = d.description;
+
+  copyBtn.addEventListener("click", () => copyText(promptBox.value, copyBtn));
+  refresh();
+
+  const pasteBox = h("textarea", {
+    class: "describe-box mono",
+    rows: "5",
+    placeholder: '{ "kind": "forge_config_draft", … }',
+    "aria-label": "Paste the JSON your AI returned",
+    oninput: (e: Event) => {
+      d.paste = (e.target as HTMLTextAreaElement).value;
+    },
+  }) as HTMLTextAreaElement;
+  pasteBox.value = d.paste;
+
+  const applyBtn = h(
+    "button",
+    {
+      type: "button",
+      onclick: () => {
+        const v = validateForgeDraft(d.paste, d.description);
+        d.result = v;
+        if (v.ok) {
+          d.applied = v.draft;
+          applyDraft(v.draft);
+          return; // applyDraft reforges, which redraws
+        }
+        renderAll();
+      },
+    },
+    "Fill in the controls",
+  );
+
+  const header = h(
+    "button",
+    {
+      type: "button",
+      class: "disclosure",
+      "aria-expanded": d.open ? "true" : "false",
+      onclick: () => {
+        d.open = !d.open;
+        renderAll();
+      },
+    },
+    h("span", { class: "disclosure-mark", "aria-hidden": "true" }, d.open ? "▾" : "▸"),
+    "Describe it instead",
+  );
+
+  if (!d.open) {
+    return h(
+      "div",
+      { class: "panel describe" },
+      header,
+      h("p", { class: "field-hint" }, "Write what your business leases in plain words and let an AI set the controls below. The page never calls one itself."),
+    );
+  }
+
+  return h(
+    "div",
+    { class: "panel describe" },
+    header,
+    h(
+      "p",
+      { class: "field-hint" },
+      "This page never calls an AI. Copy the prompt into the one you already use, bring back the JSON, and it fills in the controls below — which you can then override. ",
+      h("strong", {}, "What you write here is sent nowhere by this page and stored nowhere; if you paste it into an AI service, that is you sending it to that service."),
+      " Nothing you write reaches the forged package: every name in it comes from this app's own invented bank.",
+    ),
+    field("Describe your business", descBox),
+    counter,
+    h("div", { class: "row" }, copyBtn),
+    promptBox,
+    field("Paste what your AI returned", pasteBox),
+    h("div", { class: "row" }, applyBtn),
+    draftVerdict(),
+  );
+}
+
+/** The two registers: what was refused, and what was accepted with a caveat. */
+function draftVerdict(): HTMLElement | null {
+  const { result, applied } = state.describe;
+  if (result === null) return null;
+
+  if (!result.ok) {
+    return h(
+      "div",
+      { class: "error-box" },
+      h("strong", {}, result.kind === "malformed" ? "That is not JSON yet." : "That JSON is not a forge draft."),
+      h("ul", {}, ...result.errors.map((e) => h("li", {}, e))),
+    );
+  }
+
+  const filled = DRAFT_FIELD_NAMES.filter((n) => applied?.[n] !== undefined);
+  const missing = DRAFT_FIELD_NAMES.filter((n) => applied?.[n] === undefined);
+
+  return h(
+    "div",
+    { class: "ok-box" },
+    h("strong", {}, `Applied — ${filled.length} control${filled.length === 1 ? "" : "s"} filled, ${applied?.schemes.length ?? 0} scheme${(applied?.schemes.length ?? 0) === 1 ? "" : "s"} suggested.`),
+    // Every filled control next to the words it was read from. This is the
+    // whole reviewability story: an override is only meaningful if you can see
+    // what the model thought it was doing.
+    ...filled.map((n) => {
+      const cited = applied![n]!;
+      return h("div", { class: "cited" }, h("span", { class: "cited-field" }, FIELD_LABELS[n]), " ← ", h("q", {}, cited.quote));
+    }),
+    ...(applied?.schemes ?? []).map((s) =>
+      h("div", { class: "cited" }, h("span", { class: "cited-field" }, SCHEME_COPY[s.value].title), " ← ", h("q", {}, s.quote)),
+    ),
+    missing.length > 0
+      ? h("p", { class: "field-hint" }, `Not stated, so left as they were: ${missing.map((n) => FIELD_LABELS[n]).join(", ")}.`)
+      : null,
+    ...result.warnings.map((w) => h("p", { class: "field-hint" }, w)),
+  );
+}
+
+/**
+ * Write a validated draft into the controls. Fields the draft omitted are left
+ * exactly as they are — an omission is the model declining to guess, and
+ * honouring it means not quietly resetting something the visitor chose.
+ *
+ * The seed is never touched. It is what makes a package shareable, and it is
+ * the one control that is unambiguously the visitor's.
+ */
+function applyDraft(draft: ForgeDraft): void {
+  if (draft.property_kind) state.config.property_kind = draft.property_kind.value;
+  if (draft.size_band) state.config.size_band = draft.size_band.value;
+  if (draft.start_year) state.config.start_year = draft.start_year.value;
+  if (draft.year_count) state.config.year_count = draft.year_count.value;
+  if (draft.premises_sf) state.config.premises_sf = draft.premises_sf.value;
+  if (draft.opex_psf_target) state.config.opex_psf_target = draft.opex_psf_target.value;
+  if (draft.story) state.config.story = draft.story.value;
+  if (draft.schemes.length > 0) state.config.schemes = draft.schemes.map((s) => s.value);
+  reforge();
 }
 
 // ---------------------------------------------------------------------------
@@ -651,7 +963,7 @@ function renderAll(): void {
     h(
       "div",
       { class: "layout" },
-      h("div", { class: "col-left" }, forgePanel(), tiesPanel()),
+      h("div", { class: "col-left" }, describePanel(), forgePanel(), tiesPanel()),
       h("div", { class: "col-main" }, previewPanel()),
       h("div", { class: "col-right" }, downloadsPanel()),
     ),

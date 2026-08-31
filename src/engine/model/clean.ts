@@ -166,7 +166,7 @@ function buildUniverse(config: ScenarioConfig, rng: Rng, categories: readonly Ca
 // Capital
 // ---------------------------------------------------------------------------
 
-function buildCapitalProject(config: ScenarioConfig, rng: Rng, gla: number, contractor: string, years: readonly number[]): CapitalProject {
+function buildCapitalProject(config: ScenarioConfig, rng: Rng, basis: number, contractor: string, years: readonly number[]): CapitalProject {
   const lifeYears = rng.child("life").pick([10, 12, 15]);
   const months = lifeYears * 12;
   const startYear = config.start_year - rng.child("start").int(1, 4);
@@ -194,7 +194,7 @@ function buildCapitalProject(config: ScenarioConfig, rng: Rng, gla: number, cont
 
   // Pick the monthly principal first, so cost ÷ life divides exactly and the
   // scanner's recomputation of the annual figure lands on the cent.
-  const targetTotal = Math.round(gla * rng.child("cost").float(0.85, 1.65)) * 100;
+  const targetTotal = Math.round(basis * rng.child("cost").float(0.85, 1.65)) * 100;
   const monthly = Math.max(20_000, Math.round(targetTotal / months));
   const amort_start = iso(startYear, startMonth, 1);
   const endIdx = startYear * 12 + (startMonth - 1) + months - 1;
@@ -248,13 +248,13 @@ export function amortizationYearTotal(p: CapitalProject, year: number): number {
 // Taxes and insurance
 // ---------------------------------------------------------------------------
 
-function buildTaxParcels(config: ScenarioConfig, rng: Rng, gla: number, years: number[]): TaxParcel[] {
+function buildTaxParcels(config: ScenarioConfig, rng: Rng, basis: number, years: number[]): TaxParcel[] {
   const count = config.size_band === "small" ? 1 : config.size_band === "medium" ? 2 : rng.child("count").int(2, 3);
   const rate = Math.round(rng.child("rate").float(1.15, 2.65) * 10_000) / 10_000;
   const shares = Array.from({ length: count }, (_, i) => rng.child("share/" + i).float(0.6, 1.4));
   const shareSum = sum(shares);
 
-  const firstTotal = Math.round(gla * TAX_PSF[config.property_kind] * rng.child("level").float(0.9, 1.12) * 100);
+  const firstTotal = Math.round(basis * TAX_PSF[config.property_kind] * rng.child("level").float(0.9, 1.12) * 100);
   const totals: number[] = [];
   for (let k = 0; k < years.length; k++) {
     totals.push(k === 0 ? firstTotal : Math.round(totals[k - 1]! * (1 + rng.child("growth/" + years[k]).float(0.018, 0.062))));
@@ -299,9 +299,14 @@ function taxTotalFor(parcels: readonly TaxParcel[], year: number): number {
   return total;
 }
 
-function buildInsurance(config: ScenarioConfig, rng: Rng, gla: number, years: number[], carrier: string, policy: string): InsurancePolicy {
+/**
+ * The one place the two square footages both appear. A premium is an operating
+ * expense and moves with `basis`; a coverage limit is a statement about what the
+ * building is worth to rebuild, and moves with the building.
+ */
+function buildInsurance(config: ScenarioConfig, rng: Rng, gla: number, basis: number, years: number[], carrier: string, policy: string): InsurancePolicy {
   const premiums: number[] = [];
-  const base = Math.round(gla * INS_PSF[config.property_kind] * rng.child("level").float(0.9, 1.14) * 100);
+  const base = Math.round(basis * INS_PSF[config.property_kind] * rng.child("level").float(0.9, 1.14) * 100);
   for (let k = 0; k < years.length; k++) {
     premiums.push(k === 0 ? base : Math.round(premiums[k - 1]! * (1 + rng.child("growth/" + years[k]).float(0.025, 0.075))));
   }
@@ -356,23 +361,112 @@ function irregularMonths(rng: Rng, year: number): number[] {
 // The model
 // ---------------------------------------------------------------------------
 
+/**
+ * The largest property the generator will invent, in square feet. It exists for
+ * one case: a visitor who names a very large premises and, by the luck of the
+ * share draw, would otherwise imply a nine-million-square-foot centre around it.
+ * Clamping trades an implausible denominator for a large share — an anchor
+ * tenant — which is the honest reading of "we occupy 400,000 square feet".
+ */
+const MAX_GLA = 1_200_000;
+
+/**
+ * Premises and property, resolved together.
+ *
+ * Both directions produce the same invariant, which is the only thing tie T7
+ * cares about: `share_pct` is `premises_sf ÷ denominator_sf`, to four decimals,
+ * with nothing rounded on the way that the statement cannot reproduce.
+ *
+ * Drawn: pick the property from the size band, take a share of it, and the
+ * premises follow. Told: keep the share draw, and let the property be however
+ * large it has to be for that share to land on the premises the visitor named.
+ * The premises is then exact — which matters, because it is the one number in
+ * the package the visitor recognises as theirs.
+ *
+ * Both streams are drawn in both branches. They are keyed by name rather than
+ * by order (see `rng.ts`), so this is not about reproducibility; it is about
+ * leaving the two paths symmetrical for the next person to read them.
+ */
+function resolveFootprint(config: ScenarioConfig, rng: Rng): { gla: number; premises_sf: number; share_pct: number } {
+  const glaRange = GLA_RANGE[config.size_band];
+  const drawnGla = Math.round(rng.child("gla").int(glaRange[0], glaRange[1]) / 500) * 500;
+  const sharePct = rng.child("share").float(0.055, 0.145);
+
+  let gla: number;
+  let premises_sf: number;
+  if (config.premises_sf === undefined) {
+    gla = drawnGla;
+    premises_sf = Math.round((gla * sharePct) / 100) * 100;
+  } else {
+    premises_sf = config.premises_sf;
+    // A property has to be bigger than the space inside it, and by enough that
+    // the tenant is a tenant rather than the whole building.
+    const floor = Math.ceil((premises_sf * 1.2) / 500) * 500;
+    gla = Math.min(Math.max(Math.round(premises_sf / sharePct / 500) * 500, floor), MAX_GLA);
+  }
+
+  return { gla, premises_sf, share_pct: Math.round((premises_sf / gla) * 100 * 10_000) / 10_000 };
+}
+
+/** Close enough to stop refining the expense scale: half a cent in every dollar. */
+const PSF_TOLERANCE = 0.005;
+/** And never more than this many builds, whatever happens. */
+const PSF_MAX_PASSES = 4;
+
 export function buildCleanModel(config: ScenarioConfig): ScenarioModel {
+  if (config.opex_psf_target === undefined) return buildAtScale(config, 1);
+
+  // Build, measure, correct, build again. The first pass is only ever measured:
+  // it says what a property of this shape naturally costs per square foot, which
+  // is what the correction is computed from.
+  //
+  // It takes more than one correction because the response is not quite linear —
+  // a capital project has a floor under its monthly principal, and a tax bill is
+  // rounded to a whole assessed value — so a small property answers a doubled
+  // input with slightly less than double the spend. Each pass folds in whatever
+  // the last one missed; in practice the second lands inside a fraction of a
+  // cent and the loop stops there.
+  //
+  // Nothing here is less deterministic than a single pass: every pass re-derives
+  // from the same seed, the correction is arithmetic on a number the engine
+  // computed, and the iteration cap is a constant. No clock, no entropy.
+  //
+  // Scaling the inputs rather than the finished totals is the whole point. Every
+  // amount is still summed bottom-up from its own invoices, still pushed off a
+  // round figure afterwards, still tied to the cent. Multiplying a completed
+  // pool would defeat all three on the way past.
+  let scale = 1;
+  let model = buildAtScale(config, scale);
+  for (let pass = 1; pass < PSF_MAX_PASSES; pass++) {
+    const year = model.years[0]!;
+    const psf = year.recon.pool_total_cents / 100 / year.denominator_sf;
+    if (psf <= 0 || Math.abs(psf - config.opex_psf_target) / config.opex_psf_target < PSF_TOLERANCE) break;
+    scale *= config.opex_psf_target / psf;
+    model = buildAtScale(config, scale);
+  }
+  return model;
+}
+
+/**
+ * `expenseScale` multiplies the square footage the generator prices things off —
+ * not the square footage it bills a share on. The two are the same number until
+ * someone asks for a particular dollars-per-foot, and then they part company:
+ * the denominator on the statement stays the property's real area, while the
+ * invoices behind it are drawn as though the property were larger or smaller.
+ */
+function buildAtScale(config: ScenarioConfig, expenseScale: number): ScenarioModel {
   const rng = rootRng(config.seed);
   const categories = catalogFor(config.property_kind);
   const years: number[] = Array.from({ length: config.year_count }, (_, i) => config.start_year + i);
 
   const universe = buildUniverse(config, rng, categories);
 
-  const glaRange = GLA_RANGE[config.size_band];
-  const gla = Math.round(rng.child("gla").int(glaRange[0], glaRange[1]) / 500) * 500;
-  const sharePct = rng.child("share").float(0.055, 0.145);
-  const premises_sf = Math.round((gla * sharePct) / 100) * 100;
-  const share_pct = Math.round((premises_sf / gla) * 100 * 10_000) / 10_000;
-  const shareFrac = share_pct / 100;
+  const { gla, premises_sf, share_pct } = resolveFootprint(config, rng);
+  const basis = gla * expenseScale;
 
-  const capital = buildCapitalProject(config, rng.child("capital"), gla, universe.vendors["contractor"] ?? "Halloway Construction Group", years);
-  const parcels = buildTaxParcels(config, rng.child("tax"), gla, years);
-  const insurance = buildInsurance(config, rng.child("insurance"), gla, years, universe.insurance_carrier, universe.policy_number);
+  const capital = buildCapitalProject(config, rng.child("capital"), basis, universe.vendors["contractor"] ?? "Halloway Construction Group", years);
+  const parcels = buildTaxParcels(config, rng.child("tax"), basis, years);
+  const insurance = buildInsurance(config, rng.child("insurance"), gla, basis, years, universe.insurance_carrier, universe.policy_number);
 
   // --- category amounts, year by year -------------------------------------
   const labels = categories.map((c) => c.category);
@@ -382,7 +476,7 @@ export function buildCleanModel(config: ScenarioConfig): ScenarioModel {
     if (k === 0) {
       perYear.push(
         categories.map((c) => {
-          let v = Math.round(gla * c.psf * rng.child("level/" + c.category).float(1 - c.spread, 1 + c.spread) * 100);
+          let v = Math.round(basis * c.psf * rng.child("level/" + c.category).float(1 - c.spread, 1 + c.spread) * 100);
           v = avoidRoundAmount(v, rng.child("level-round/" + c.category));
           return v;
         }),

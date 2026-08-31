@@ -111,6 +111,49 @@ Three decisions carry the weight of that:
   by an app whose whole claim is byte-level reproducibility.
 - [ADR 0003 — money is integer cents here too](docs/adr/0003-integer-cents-affirmed.md):
   why this app does not take the float exemption its cap-engine sibling took.
+- [ADR 0004 — a description sets parameters, never the package](docs/adr/0004-describe-maps-to-parameters-only.md):
+  where the prose in "Describe it instead" stops, and why it stops there.
+
+## Describe it instead
+
+The controls are honest, but nobody recognises their own business in "retail
+strip, medium". So you can write a paragraph instead:
+
+> We lease 40,000 square feet in a suburban retail centre. Operating expenses run
+> about $9.50 a foot. Last year the landlord repaved the whole parking lot and
+> charged it all to that year.
+
+Copy the prompt the page builds, run it in whatever AI you already use, paste the
+JSON back. The controls fill in — property kind, size, years, your square
+footage, your dollars per foot, a caption, and the schemes your grievance
+describes — and each one is shown **beside the words it was read from**, so an
+override is a decision rather than a guess.
+
+The page never calls an AI. It cannot: `connect-src 'none'`.
+
+What the AI is trusted with is deliberately small. It fills seven knobs and
+suggests schemes; it never writes an amount, and it never names anything. Every
+dollar is still computed by the engine, bottom-up from invoices it drew itself,
+so the seven ties still hold. Every name still comes from the seeded synthetic
+bank. **Your description reaches none of it** — it is not stored in the package,
+in an export, or anywhere else, which is what keeps the zero-client-data promise
+true even for a package you configured yourself. A quote that does not appear in
+your description is rejected, and a caption naming a property another app in the
+family owns is rejected too.
+
+Two knobs are new, and usable without any of the above:
+
+| Knob | Range | Blank means |
+|---|---|---|
+| `premises_sf` | 2,000 – 500,000 sf | the size band draws one |
+| `opex_psf_target` | $2.00 – $60.00 / sf | whatever the property naturally costs |
+
+Naming a square footage sizes the property *around* it, rather than overriding
+it, because T7 requires the billed share to reproduce from the two figures.
+Naming a rate scales the inputs the generator draws amounts from — never a
+finished total — and converges by re-forging. `src/engine/model/bounds.ts` holds
+both ranges, and the engine is the gate: the input attributes agree with it as a
+courtesy, and a pasted draft never sees them at all.
 
 ## How the Red-Flag Scanner consumes this
 
@@ -137,7 +180,7 @@ holds it there, against the copies of the scanner's own rules in
 
 ```
 npm install
-npm run dev      # http://localhost:5173
+npm run dev      # http://localhost:5174
 npm test         # 1,000+ tests
 npm run ci       # typecheck → test → build → client-data gate → build smoke
 ```

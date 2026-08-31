@@ -1,0 +1,277 @@
+{
+  "meta": {
+    "package_id": "UCC1-2022-clean",
+    "property_name": "Underhill Corporate Center",
+    "tenant_name": "Vandermeer Diagnostics",
+    "premises_sf": 6000,
+    "currency": "USD",
+    "schema_version": "1.1",
+    "story": "A clean package. Every document ties to the cent and there is nothing to find — which is what makes it worth scanning."
+  },
+  "lease_lite": {
+    "share": {
+      "numerator_sf": 6000,
+      "denominator_basis": "GLA"
+    },
+    "cap": {
+      "applies_to": "controllable",
+      "pct": 6,
+      "method": "non_cumulative",
+      "basis": "amount_paid",
+      "base_year": 2021,
+      "base_year_amount": 155308.04,
+      "fee_treatment": "outside_cap"
+    },
+    "fees": [
+      {
+        "kind": "management",
+        "rate_pct": 4,
+        "base": "cam_only"
+      }
+    ],
+    "capital_threshold": 10000,
+    "capital_life_years": 10,
+    "gross_up": {
+      "allowed": true,
+      "to_pct": 95
+    }
+  },
+  "years": [
+    {
+      "year": 2022,
+      "occupancy_pct": 94.9,
+      "denominator_sf": 96000,
+      "lines": [
+        {
+          "label": "Landscaping & grounds",
+          "section": "CAM",
+          "bucket": "controllable",
+          "amount": 12486.68
+        },
+        {
+          "label": "Janitorial — common areas",
+          "section": "CAM",
+          "bucket": "controllable",
+          "amount": 52696.25
+        },
+        {
+          "label": "Mechanical systems maintenance",
+          "section": "CAM",
+          "bucket": "controllable",
+          "amount": 19650.51
+        },
+        {
+          "label": "Elevator maintenance",
+          "section": "CAM",
+          "bucket": "controllable",
+          "amount": 15978.37
+        },
+        {
+          "label": "Security patrol",
+          "section": "CAM",
+          "bucket": "controllable",
+          "amount": 26625.23
+        },
+        {
+          "label": "Repairs & maintenance",
+          "section": "CAM",
+          "bucket": "controllable",
+          "amount": 26778.88
+        },
+        {
+          "label": "Fire & life safety inspections",
+          "section": "CAM",
+          "bucket": "controllable",
+          "amount": 5725.71
+        },
+        {
+          "label": "Common area lighting — electricity",
+          "section": "CAM",
+          "bucket": "non_controllable",
+          "amount": 45586.22
+        },
+        {
+          "label": "Water & sewer — common areas",
+          "section": "CAM",
+          "bucket": "non_controllable",
+          "amount": 8847.2
+        },
+        {
+          "label": "Snow removal",
+          "section": "CAM",
+          "bucket": "non_controllable",
+          "amount": 9148.72
+        },
+        {
+          "label": "Amortization of building systems (yr 2 of 10)",
+          "section": "CAM",
+          "bucket": "non_controllable",
+          "amount": 21449.86,
+          "capital": {
+            "total_cost": 142929.6,
+            "useful_life_months": 120,
+            "interest_rate_pct": 5.75,
+            "in_service": "2021-03-01"
+          }
+        },
+        {
+          "label": "Real estate taxes",
+          "section": "Taxes",
+          "bucket": "non_controllable",
+          "amount": 181936.34
+        },
+        {
+          "label": "Property insurance",
+          "section": "Insurance",
+          "bucket": "non_controllable",
+          "amount": 19303.19
+        },
+        {
+          "label": "Management fee (4%)",
+          "section": "Fees",
+          "bucket": "non_controllable",
+          "amount": 8940.95,
+          "is_fee": true
+        }
+      ],
+      "cap_summary": {
+        "pool_label": "Controllable CAM (subject to 6% cap)",
+        "pool_actual": 159941.63,
+        "pool_allowed": 164626.52,
+        "pool_billed": 159941.63
+      },
+      "tenant_summary": {
+        "pro_rata_share_pct": 6.25,
+        "tenant_total": 28447.13,
+        "estimates_paid": 25717.2,
+        "balance_due": 2729.93
+      },
+      "tax_backup": {
+        "parcels": [
+          {
+            "parcel_id": "398-16-865",
+            "billed": 181936.34
+          }
+        ]
+      }
+    },
+    {
+      "year": 2023,
+      "occupancy_pct": 95.3,
+      "denominator_sf": 96000,
+      "lines": [
+        {
+          "label": "Landscaping & grounds",
+          "section": "CAM",
+          "bucket": "controllable",
+          "amount": 12852.69
+        },
+        {
+          "label": "Janitorial — common areas",
+          "section": "CAM",
+          "bucket": "controllable",
+          "amount": 53321.55
+        },
+        {
+          "label": "Mechanical systems maintenance",
+          "section": "CAM",
+          "bucket": "controllable",
+          "amount": 19813.16
+        },
+        {
+          "label": "Elevator maintenance",
+          "section": "CAM",
+          "bucket": "controllable",
+          "amount": 16159.74
+        },
+        {
+          "label": "Security patrol",
+          "section": "CAM",
+          "bucket": "controllable",
+          "amount": 27058.47
+        },
+        {
+          "label": "Repairs & maintenance",
+          "section": "CAM",
+          "bucket": "controllable",
+          "amount": 27214.71
+        },
+        {
+          "label": "Fire & life safety inspections",
+          "section": "CAM",
+          "bucket": "controllable",
+          "amount": 6188.92
+        },
+        {
+          "label": "Common area lighting — electricity",
+          "section": "CAM",
+          "bucket": "non_controllable",
+          "amount": 47658.83
+        },
+        {
+          "label": "Water & sewer — common areas",
+          "section": "CAM",
+          "bucket": "non_controllable",
+          "amount": 8572.21
+        },
+        {
+          "label": "Snow removal",
+          "section": "CAM",
+          "bucket": "non_controllable",
+          "amount": 9042.37
+        },
+        {
+          "label": "Amortization of building systems (yr 3 of 10)",
+          "section": "CAM",
+          "bucket": "non_controllable",
+          "amount": 20628.02,
+          "capital": {
+            "total_cost": 142929.6,
+            "useful_life_months": 120,
+            "interest_rate_pct": 5.75,
+            "in_service": "2021-03-01"
+          }
+        },
+        {
+          "label": "Real estate taxes",
+          "section": "Taxes",
+          "bucket": "non_controllable",
+          "amount": 187609.73
+        },
+        {
+          "label": "Property insurance",
+          "section": "Insurance",
+          "bucket": "non_controllable",
+          "amount": 20603.09
+        },
+        {
+          "label": "Management fee (4%)",
+          "section": "Fees",
+          "bucket": "non_controllable",
+          "amount": 9115.31,
+          "is_fee": true
+        }
+      ],
+      "cap_summary": {
+        "pool_label": "Controllable CAM (subject to 6% cap)",
+        "pool_actual": 162609.24,
+        "pool_allowed": 169538.13,
+        "pool_billed": 162609.24
+      },
+      "tenant_summary": {
+        "pro_rata_share_pct": 6.25,
+        "tenant_total": 29114.93,
+        "estimates_paid": 28186.68,
+        "balance_due": 928.25
+      },
+      "tax_backup": {
+        "parcels": [
+          {
+            "parcel_id": "398-16-865",
+            "billed": 187609.73
+          }
+        ]
+      }
+    }
+  ]
+}

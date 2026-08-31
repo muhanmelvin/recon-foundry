@@ -153,6 +153,11 @@ function taxBackupFor(model: ScenarioModel, year: number): { tax_backup?: unknow
 }
 
 function storyOf(model: ScenarioModel): string {
+  // A story the visitor wrote wins over the one the engine would compose. It is
+  // the only human sentence anywhere in a forged package, and `bounds.ts` has
+  // already held it to a caption's length and refused a name another app owns.
+  const written = model.config.story;
+  if (written !== undefined && written.trim() !== "") return written.trim();
   if (model.config.schemes.length === 0) {
     return `A clean package. Every document ties to the cent and there is nothing to find — which is what makes it worth scanning.`;
   }

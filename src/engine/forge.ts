@@ -8,6 +8,7 @@
  */
 
 import { rootRng } from "./rng.ts";
+import { validateScenarioConfig } from "./model/bounds.ts";
 import { buildCleanModel } from "./model/clean.ts";
 import { applySchemes } from "./model/schemes/index.ts";
 import { buildAnswerKey, type AnswerKey } from "./model/answer-key.ts";
@@ -26,6 +27,11 @@ export interface Scenario {
 }
 
 export function forge(config: ScenarioConfig): Scenario {
+  // The gate, not the markup. A panel's min/max colours a control; a pasted
+  // draft or a hand-built config never sees it, and both reach this line.
+  const errors = validateScenarioConfig(config);
+  if (errors.length > 0) throw new Error("forge: " + errors.join(" "));
+
   const model = buildCleanModel(config);
   applySchemes(model, rootRng(config.seed));
   return { model, answerKey: buildAnswerKey(model), breaks: checkTies(model) };
