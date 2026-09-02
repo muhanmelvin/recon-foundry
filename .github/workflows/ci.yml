@@ -21,8 +21,8 @@ jobs:
       # Do not remove this.
       REQUIRE_PRIVATE_DENYLIST: "1"
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
         with:
           node-version: 22
           cache: npm
@@ -31,7 +31,7 @@ jobs:
       - run: npm test
       - run: npm run build
       - run: npm run build:single
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: single-file-build
           path: dist-single/index.html
@@ -59,15 +59,15 @@ jobs:
       CLIENT_DENYLIST: ${{ secrets.CLIENT_DENYLIST }}
       REQUIRE_PRIVATE_DENYLIST: "1"
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
         with:
           node-version: 22
           cache: npm
       - run: npm ci
       - run: npm run build
-      - uses: actions/configure-pages@v5
-      - uses: actions/upload-pages-artifact@v3
+      - uses: actions/configure-pages@v6
+      - uses: actions/upload-pages-artifact@v5
         with:
           path: dist
       - id: deployment
