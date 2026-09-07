@@ -141,6 +141,19 @@ export function isScannerTaxLine(line: { label: string; section: string; is_fee?
 }
 
 /**
+ * Whether a line reads as a fee for managing the property, by its caption or by
+ * the section it sits in — which is how the scanner decides what to compare
+ * against the lease's fee term, and how this repo decides whether a second fee
+ * has appeared beside the first.
+ *
+ * Source: `red-flag-scanner/src/engine/lines.ts` (`FEE_RE`, `FEE_SECTION_RE`,
+ * `lineKind`).
+ */
+export function looksLikeFee(label: string, section: string): boolean {
+  return FEE_RE.test(normalizeLabel(label)) || FEE_SECTION_RE.test(normalizeLabel(section));
+}
+
+/**
  * The base RF-07 will compute a `cam_only` fee on, given the lines as the
  * scanner sees them: every non-fee line that is not taxes and not insurance.
  *

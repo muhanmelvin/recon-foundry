@@ -75,6 +75,9 @@ describe("each scheme breaks the tie its lesson is about", () => {
     // other.
     kept_tax_refund: ["T4"],
     budget_tax_billing: ["T4"],
+    // And the second fee is back to the lease: the arithmetic on the page is
+    // right, and §6.03 provides for one fee, not two.
+    admin_fee_stacking: ["T7"],
   };
 
   it.each(SCHEME_ORDER.map((s) => [s, s] as const))("%s", (_n, scheme) => {
@@ -130,6 +133,70 @@ describe("taxes billed at budget, and never trued up", () => {
     const credited = taxCreditsIn(model.tax_parcels, last);
     expect(truth.tax_correct).toEqual(levied - credited);
     expect(truth.tax_billed - truth.tax_correct).toBeGreaterThan(credited);
+  });
+});
+
+describe("a second fee for the service the first fee is for", () => {
+  const base = BASES[0]!;
+
+  it("bills it every year, outside the cap and outside the fee's own base", () => {
+    const { model } = forge(withSchemes(base, ["admin_fee_stacking"]));
+    for (const y of model.years) {
+      const admin = y.pools.find((p) => p.category === "Administrative fee")!;
+      expect(admin, `${y.year} has no second fee`).toBeDefined();
+      expect(admin.section).toBe("Fees");
+      // Non-controllable, so it does not lean on the cap; outside the fee base,
+      // so it does not raise the management fee with it.
+      expect(admin.bucket).toBe("non_controllable");
+      expect(admin.outside_fee_base).toBe(true);
+      expect(admin.is_fee).toBeUndefined();
+
+      const mgmt = y.pools.find((p) => p.is_fee)!;
+      expect(admin.amount_cents).toBeLessThan(mgmt.amount_cents);
+      const gl = y.gl.filter((g) => g.category === "Administrative fee");
+      expect(gl).toHaveLength(12);
+      expect(gl.reduce((a, g) => a + g.amount_cents, 0)).toEqual(admin.amount_cents);
+      expect(gl.every((g) => g.vendor === model.universe.management_agent)).toBe(true);
+    }
+  });
+
+  it("appears in every year, so nothing about it is new", () => {
+    // A line that arrived only in the last year would be RF-02 as well, and the
+    // trainee would find the appearance rather than the duplication. The
+    // amortization caption carries its own year and is exempt from the
+    // scanner's appeared/vanished tests for exactly that reason.
+    const { model } = forge(withSchemes(base, ["admin_fee_stacking"]));
+    const shape = (i: number) => model.years[i]!.pools.filter((p) => !p.capital_project_id).map((p) => p.category).sort();
+    for (let k = 1; k < model.years.length; k++) expect(shape(k)).toEqual(shape(0));
+  });
+
+  it("is disallowed in full by the answer key, and only asked about by the scanner", () => {
+    const { model, answerKey } = forge(withSchemes(base, ["admin_fee_stacking"]));
+    for (const y of model.years) {
+      const admin = y.pools.find((p) => p.category === "Administrative fee")!;
+      const truth = answerKey.ledger[y.year]!;
+      // Nothing recomputes a fee the lease states no rate for: the whole line
+      // is excess, and the pool the lease supports is the pool without it.
+      expect(truth.pool_billed - truth.pool_correct).toBeGreaterThanOrEqual(admin.amount_cents);
+      expect(truth.fee_billed).toEqual(y.recon.fee_billed_cents);
+    }
+    for (const f of answerKey.findings) {
+      expect(f.check_id).toBe("RF-07");
+      expect(f.severity).toBe("review");
+      expect(f.category).toContain("Administrative fee");
+      // The duplication test reports an exposure, not a priced overcharge, so
+      // there is nothing for a range to bound.
+      expect(f.expected_impact_range).toBeUndefined();
+    }
+  });
+
+  it("leaves the management fee reproducing at the lease's own rate", () => {
+    const { model } = forge(withSchemes(base, ["admin_fee_stacking"]));
+    for (const y of model.years) {
+      const mgmt = y.pools.find((p) => p.is_fee)!;
+      const cam = y.pools.filter((p) => p.section === "CAM" && !p.outside_fee_base).reduce((a, p) => a + p.amount_cents, 0);
+      expect(Math.abs(mgmt.amount_cents - Math.round(cam * (model.lease.fee.rate_pct / 100)))).toBeLessThanOrEqual(1);
+    }
   });
 });
 

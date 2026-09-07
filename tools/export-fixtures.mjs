@@ -75,6 +75,11 @@ const FIXTURES = [
     },
   },
   {
+    name: "admin-fee",
+    note: "A management fee at the rate the lease states and an administrative fee beside it, with the base widened under both — RF-07 from two directions at once.",
+    config: { seed: "fixture-admin-1", start_year: 2023, year_count: 3, property_kind: "office", size_band: "medium", schemes: ["fee_base_expansion", "admin_fee_stacking"] },
+  },
+  {
     name: "budget-tax",
     note: "Real estate taxes billed at the landlord's budget and never trued up to the county's bill — RF-13 from the other direction.",
     config: { seed: "fixture-budget-1", start_year: 2023, year_count: 3, property_kind: "retail_strip", size_band: "medium", schemes: ["budget_tax_billing"] },

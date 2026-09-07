@@ -172,6 +172,7 @@ function storyOf(model: ScenarioModel): string {
     bucket_migration: "a controllable cost moved out of the capped pool",
     kept_tax_refund: "a tax refund kept",
     budget_tax_billing: "taxes billed at budget and never trued up",
+    admin_fee_stacking: "a second fee for the service the first fee is for",
   };
   const list = model.config.schemes.map((s) => named[s] ?? s);
   const last = list.pop()!;

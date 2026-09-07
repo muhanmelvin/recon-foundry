@@ -24,6 +24,7 @@ import { plantFeeBaseExpansion } from "./fee-base.ts";
 import { plantBucketMigration } from "./migration.ts";
 import { plantKeptTaxRefund } from "./kept-refund.ts";
 import { plantBudgetTaxBilling } from "./budget-tax.ts";
+import { plantAdminFeeStacking } from "./admin-fee.ts";
 
 /**
  * What a scheme returns: what it planted, and how the reconciliation must be
@@ -46,6 +47,7 @@ const SCHEMES: Record<SchemeId, SchemeFn> = {
   bucket_migration: plantBucketMigration,
   kept_tax_refund: plantKeptTaxRefund,
   budget_tax_billing: plantBudgetTaxBilling,
+  admin_fee_stacking: plantAdminFeeStacking,
 };
 
 /**

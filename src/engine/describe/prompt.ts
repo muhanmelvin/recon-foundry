@@ -61,6 +61,8 @@ export const SCHEME_PROMPT_HINTS: Record<SchemeId, string> = {
     "a property-tax appeal that won a refund the landlord kept, while the tenant went on paying a share of the original bill",
   budget_tax_billing:
     "a real-estate-tax charge that looks like an estimate every year and is never corrected to the bill the county actually sent",
+  admin_fee_stacking:
+    "a management fee and an administration or supervision fee charged side by side, both of them for running the same property",
 };
 
 const OUTPUT_SHAPE = `{

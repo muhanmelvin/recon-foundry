@@ -130,6 +130,10 @@ const SCHEME_COPY: Record<SchemeId, { title: string; blurb: string }> = {
     title: "Taxes billed at budget",
     blurb: "The estimate never becomes an actual. Twelve accruals, no true-up, and the county's bill says less.",
   },
+  admin_fee_stacking: {
+    title: "A second fee for the same service",
+    blurb: "The management fee at the rate the lease states, and an administrative fee beside it. One service, two lines.",
+  },
 };
 
 const KIND_LABEL: Record<PropertyKind, string> = {

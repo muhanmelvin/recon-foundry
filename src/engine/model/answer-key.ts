@@ -23,7 +23,7 @@
 import type { AnswerFinding, ScenarioModel, SchemeId } from "./types.ts";
 import { feeBaseCents, leaseLadder, mulRate, sumCents } from "./recompute.ts";
 import { taxBorneIn, taxCreditsIn } from "./tax.ts";
-import { scannerFeeBaseCents } from "../scanner-rules.ts";
+import { looksLikeFee, scannerFeeBaseCents } from "../scanner-rules.ts";
 
 export interface YearTruth {
   pool_billed: number;
@@ -110,6 +110,10 @@ export function correctFigures(model: ScenarioModel): Record<number, YearTruth> 
       if (p.section === "Taxes") {
         amount = taxBorneIn(model.tax_parcels, y.year) - taxCreditsIn(model.tax_parcels, y.year);
       }
+
+      // A second fee for the one service §6.03 provides a fee for. There is no
+      // rate to recompute it at, because the lease states no term for it.
+      if (!p.is_fee && !p.capital_project_id && looksLikeFee(p.category, p.section)) amount = 0;
 
       // A category that changed class between years: the lease fixes the class.
       if (prior && !p.is_fee && !p.capital_project_id) {
@@ -213,6 +217,12 @@ function fillExpectedRanges(model: ScenarioModel, findings: AnswerFinding[], led
       const rung = ladder?.get(f.year);
       const payableAsPresented = rung ? Math.min(truth.controllable_billed, rung.ceiling) : truth.cap_payable_correct;
       f.expected_impact_range = band(mulRate(Math.max(0, truth.cap_billed - payableAsPresented), shareFrac));
+    } else if (f.check_id === "RF-07" && f.scheme === "admin_fee_stacking") {
+      // The scanner reports stacked fees as an exposure to be substantiated,
+      // not as a priced overcharge: a statement cannot say what the second line
+      // bought. There is nothing for a range to bound, and the manifest leaves
+      // it out rather than expecting an impact the check never states.
+      continue;
     } else if (f.check_id === "RF-07") {
       // The scanner's permitted base, not the lease's narrower one.
       const scannerBase = scannerFeeBaseCents(

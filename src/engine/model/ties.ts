@@ -19,7 +19,7 @@
  */
 
 import type { ScenarioModel, TieId } from "./types.ts";
-import { amortizationForYear, looksCapital } from "../scanner-rules.ts";
+import { amortizationForYear, looksCapital, looksLikeFee } from "../scanner-rules.ts";
 import { monthIndex, parseIso } from "../dates.ts";
 import { feeBaseCents, leaseLadder } from "./recompute.ts";
 import { billLabel, creditsIn, installmentsIn, taxBorneIn } from "./tax.ts";
@@ -156,6 +156,21 @@ export function checkTies(model: ScenarioModel): TieBreak[] {
     const feeLine = y.pools.find((p) => p.is_fee);
     if (feeLine) {
       push("T7", y.year, feeLine.amount_cents - mulRate(permittedBase, model.lease.fee.rate_pct / 100), `the lease allows ${model.lease.fee.rate_pct}% of ${cents(permittedBase)}, the statement bills ${cents(feeLine.amount_cents)}`, feeLine.category);
+    }
+
+    // §6.03 provides for one fee, for one service. A second line that reads as
+    // a fee for managing the property has no term in the lease behind it,
+    // whatever it is captioned and however honestly it is accrued.
+    for (const pool of y.pools) {
+      if (pool.is_fee || pool.capital_project_id) continue;
+      if (!looksLikeFee(pool.category, pool.section)) continue;
+      push(
+        "T7",
+        y.year,
+        pool.amount_cents,
+        `"${pool.category}" is a second fee for managing the property, billed beside the fee §6.03 provides for; the lease states one fee and one rate`,
+        pool.category,
+      );
     }
 
     if (leaseCeilings) {
