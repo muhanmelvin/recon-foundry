@@ -134,6 +134,10 @@ const SCHEME_COPY: Record<SchemeId, { title: string; blurb: string }> = {
     title: "A second fee for the same service",
     blurb: "The management fee at the rate the lease states, and an administrative fee beside it. One service, two lines.",
   },
+  portfolio_allocation: {
+    title: "Another property's invoice",
+    blurb: "One job a year coded to the wrong property. Nothing in the arithmetic is wrong; five words in a memo are.",
+  },
 };
 
 const KIND_LABEL: Record<PropertyKind, string> = {

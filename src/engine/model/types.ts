@@ -31,7 +31,8 @@ export type SchemeId =
   | "bucket_migration" //    → RF-04 (with RF-02 and RF-03)
   | "kept_tax_refund" //     → RF-13, and only through the tax backup the JSON carries
   | "budget_tax_billing" //  → RF-13, from the other direction: billed at budget, never trued up
-  | "admin_fee_stacking"; //  → RF-07's duplication test: one service, two fees
+  | "admin_fee_stacking" //   → RF-07's duplication test: one service, two fees
+  | "portfolio_allocation"; // → no check at all: only a ledger memo betrays it
 
 /** Canonical order. `applySchemes` follows it, so a combination is deterministic. */
 export const SCHEME_ORDER: readonly SchemeId[] = Object.freeze([
@@ -42,6 +43,7 @@ export const SCHEME_ORDER: readonly SchemeId[] = Object.freeze([
   "kept_tax_refund",
   "budget_tax_billing",
   "admin_fee_stacking",
+  "portfolio_allocation",
 ]);
 
 export interface ScenarioConfig {
@@ -192,6 +194,15 @@ export interface GLEntry {
   vendor: string;
   memo: string;
   amount_cents: number;
+  /**
+   * The property the cost was incurred at, when it was not this one.
+   *
+   * Absent on every entry in an honest ledger, which is why it is optional: a
+   * package that never sets it is the package that was always forged. It is
+   * what tie T1 reads to know that an invoice in this ledger belongs to another
+   * property; the human reading the sheet has the memo instead, which names it.
+   */
+  property_code?: string;
 }
 
 export interface CategoryPool {

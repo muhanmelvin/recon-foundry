@@ -25,6 +25,7 @@ import { plantBucketMigration } from "./migration.ts";
 import { plantKeptTaxRefund } from "./kept-refund.ts";
 import { plantBudgetTaxBilling } from "./budget-tax.ts";
 import { plantAdminFeeStacking } from "./admin-fee.ts";
+import { plantPortfolioAllocation } from "./portfolio-allocation.ts";
 
 /**
  * What a scheme returns: what it planted, and how the reconciliation must be
@@ -48,6 +49,7 @@ const SCHEMES: Record<SchemeId, SchemeFn> = {
   kept_tax_refund: plantKeptTaxRefund,
   budget_tax_billing: plantBudgetTaxBilling,
   admin_fee_stacking: plantAdminFeeStacking,
+  portfolio_allocation: plantPortfolioAllocation,
 };
 
 /**

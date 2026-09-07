@@ -16,6 +16,7 @@ import { checkTies } from "../src/engine/model/ties.ts";
 import { toScannerManifest } from "../src/engine/model/answer-key.ts";
 import { SCHEME_ORDER, type ScenarioConfig, type SchemeId, type TieId } from "../src/engine/model/types.ts";
 import { taxBorneIn, taxCreditsIn } from "../src/engine/model/tax.ts";
+import { allBankWords } from "../src/engine/names.ts";
 import { sweep } from "./helpers/sweep.ts";
 
 const BASES = sweep().slice(0, 9);
@@ -78,6 +79,9 @@ describe("each scheme breaks the tie its lesson is about", () => {
     // And the second fee is back to the lease: the arithmetic on the page is
     // right, and §6.03 provides for one fee, not two.
     admin_fee_stacking: ["T7"],
+    // The last one has no arithmetic to it at all. The ledger adds to the
+    // statement; what it adds up is partly somebody else's property.
+    portfolio_allocation: ["T1"],
   };
 
   it.each(SCHEME_ORDER.map((s) => [s, s] as const))("%s", (_n, scheme) => {
@@ -200,6 +204,86 @@ describe("a second fee for the service the first fee is for", () => {
   });
 });
 
+describe("another property's invoice, in this property's ledger", () => {
+  const base = BASES[0]!;
+
+  it("books one a year, from this property's own contractor, naming somewhere else", () => {
+    const { model } = forge(withSchemes(base, ["portfolio_allocation"]));
+    for (const y of model.years) {
+      const foreign = y.gl.filter((g) => g.property_code !== undefined && g.property_code !== model.universe.property_code);
+      expect(foreign, `${y.year}`).toHaveLength(1);
+      const g = foreign[0]!;
+      expect(g.amount_cents).toBeGreaterThan(0);
+      expect(g.memo).toContain("allocated per portfolio schedule");
+      expect(g.memo).not.toContain(model.universe.property_name);
+      // The vendor really does work here, which is what makes the entry look
+      // ordinary in a ledger full of that vendor's invoices.
+      expect(y.gl.filter((x) => x.vendor === g.vendor).length).toBeGreaterThan(1);
+      expect(g.date.slice(0, 4)).toEqual(String(y.year));
+    }
+  });
+
+  it("takes the same share of the same category every year, so nothing swings", () => {
+    const { model } = forge(withSchemes(base, ["portfolio_allocation"]));
+    const shares = model.years.map((y) => {
+      const g = y.gl.find((x) => x.property_code !== undefined && x.property_code !== model.universe.property_code)!;
+      const line = y.pools.find((p) => p.category === g.category)!;
+      return g.amount_cents / line.amount_cents;
+    });
+    for (const share of shares) {
+      expect(share).toBeGreaterThan(0.05);
+      expect(share).toBeLessThan(0.15);
+    }
+    expect(Math.max(...shares) - Math.min(...shares)).toBeLessThan(0.02);
+    // One category, the same one throughout: a cost that moved would be a
+    // different finding.
+    const categories = new Set(
+      model.years.map((y) => y.gl.find((x) => x.property_code !== undefined && x.property_code !== model.universe.property_code)!.category),
+    );
+    expect(categories.size).toBe(1);
+  });
+
+  it("adds up everywhere the arithmetic can be checked", () => {
+    const { model } = forge(withSchemes(base, ["portfolio_allocation"]));
+    for (const y of model.years) {
+      const g = y.gl.find((x) => x.property_code !== undefined && x.property_code !== model.universe.property_code)!;
+      const line = y.pools.find((p) => p.category === g.category)!;
+      const booked = y.gl.filter((x) => x.category === line.category).reduce((a, x) => a + x.amount_cents, 0);
+      // The ledger and the statement agree to the cent. That is the whole
+      // difficulty of the scheme: only the memo is wrong.
+      expect(booked).toEqual(line.amount_cents);
+    }
+  });
+
+  it("is declared as a finding no check can raise", () => {
+    const { model, answerKey } = forge(withSchemes(base, ["portfolio_allocation"]));
+    expect(answerKey.findings).toHaveLength(model.years.length);
+    for (const f of answerKey.findings) {
+      expect(f.check_id).toBeNull();
+      expect(f.expected_impact_range).toBeUndefined();
+    }
+    expect(answerKey.expected_scanner.document_only).toBe(model.years.length);
+    expect(answerKey.expected_scanner.high_min).toBe(0);
+    // The manifest carries nothing a check cannot raise, and says how many it
+    // left out.
+    const manifest = toScannerManifest(answerKey) as { findings: unknown[]; document_only_findings: number };
+    expect(manifest.findings).toEqual([]);
+    expect(manifest.document_only_findings).toBe(model.years.length);
+    // It still costs the tenant, and the answer key still prices it.
+    expect(answerKey.total_planted_tenant_impact_cents).toBeGreaterThan(0);
+  });
+
+  it("names the other property out of the same invented bank as everything else", () => {
+    const { model } = forge(withSchemes(base, ["portfolio_allocation"]));
+    const memo = model.years[0]!.gl.find((g) => g.property_code !== undefined && g.property_code !== model.universe.property_code)!.memo;
+    const words = new Set(allBankWords().map((w) => w.toLowerCase()));
+    const named = memo.split(" — ")[1]!.replace(", allocated per portfolio schedule", "");
+    for (const word of named.split(" ")) {
+      expect(words.has(word.toLowerCase()), `"${word}" is not a word from the name bank`).toBe(true);
+    }
+  });
+});
+
 describe("the answer key is derived from the finished package", () => {
   it.each(BASES.map((b) => [b.seed, b] as const))("%s prices every year against the lease", (_seed, base) => {
     const { model, answerKey } = forge(withSchemes(base, [...SCHEME_ORDER]));
@@ -237,14 +321,21 @@ describe("the answer key is derived from the finished package", () => {
 });
 
 describe("the manifest is what the scanner can actually be held to", () => {
-  it("carries every finding a check can raise, the kept refund included", () => {
-    const { answerKey } = forge(withSchemes(BASES[0]!, [...SCHEME_ORDER]));
+  it("carries every finding a check can raise, and counts the ones none can", () => {
+    const { model, answerKey } = forge(withSchemes(BASES[0]!, [...SCHEME_ORDER]));
     const manifest = toScannerManifest(answerKey) as { findings: Array<{ check_id: string }>; document_only_findings: number; cofires: string[] };
     expect(manifest.findings.every((f) => f.check_id !== null)).toBe(true);
     expect(manifest.findings.map((f) => f.check_id)).toContain("RF-13");
-    // Zero since RF-13 landed. The count stays in the format: it is how the
-    // *next* scheme no check can see gets declared instead of hidden.
-    expect(manifest.document_only_findings).toBe(0);
+
+    // The count was zero from the day RF-13 closed the kept refund until the
+    // allocated invoice opened a new gap on purpose. It is declared rather than
+    // hidden, which is the whole reason the field is in the format: a manifest
+    // that quietly omitted an unfindable scheme would let the scanner look
+    // complete on a package it cannot fully read.
+    const invisible = answerKey.findings.filter((f) => f.check_id === null);
+    expect(manifest.document_only_findings).toBe(invisible.length);
+    expect(invisible.length).toBe(model.years.length);
+    expect(new Set(invisible.map((f) => f.scheme))).toEqual(new Set(["portfolio_allocation"]));
   });
 
   it("names the checks that fire as a consequence, so a test can tell them from surprises", () => {

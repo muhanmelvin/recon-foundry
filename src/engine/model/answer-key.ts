@@ -111,6 +111,14 @@ export function correctFigures(model: ScenarioModel): Record<number, YearTruth> 
         amount = taxBorneIn(model.tax_parcels, y.year) - taxCreditsIn(model.tax_parcels, y.year);
       }
 
+      // Costs booked to this property that were incurred at another one. The
+      // ledger is the only place they are visible, and §6.01 recovers the cost
+      // of operating this Property.
+      const elsewhere = sumCents(
+        y.gl.filter((g) => g.category === p.category && g.property_code !== undefined && g.property_code !== model.universe.property_code).map((g) => g.amount_cents),
+      );
+      amount -= elsewhere;
+
       // A second fee for the one service §6.03 provides a fee for. There is no
       // rate to recompute it at, because the lease states no term for it.
       if (!p.is_fee && !p.capital_project_id && looksLikeFee(p.category, p.section)) amount = 0;

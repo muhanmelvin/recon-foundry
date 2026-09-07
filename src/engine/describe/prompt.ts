@@ -63,6 +63,8 @@ export const SCHEME_PROMPT_HINTS: Record<SchemeId, string> = {
     "a real-estate-tax charge that looks like an estimate every year and is never corrected to the bill the county actually sent",
   admin_fee_stacking:
     "a management fee and an administration or supervision fee charged side by side, both of them for running the same property",
+  portfolio_allocation:
+    "charges for work done at another building the same landlord owns, spread onto this one's bill",
 };
 
 const OUTPUT_SHAPE = `{

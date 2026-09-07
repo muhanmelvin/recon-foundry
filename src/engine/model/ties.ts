@@ -90,6 +90,14 @@ export function checkTies(model: ScenarioModel): TieBreak[] {
       const booked = glByCategory.get(pool.category) ?? 0;
       push("T1", y.year, booked - pool.amount_cents, `general ledger books ${cents(booked)} against a billed ${cents(pool.amount_cents)}`, pool.category);
     }
+    // The general ledger is *this* property's ledger — the sheet says so at the
+    // top of it. An invoice booked in it for somewhere else is not one of this
+    // category's invoices, however neatly the category still adds.
+    for (const g of y.gl) {
+      if (g.property_code === undefined || g.property_code === model.universe.property_code) continue;
+      push("T1", y.year, g.amount_cents, `${cents(g.amount_cents)} booked against "${g.category}" was incurred at another property (${g.memo})`, g.category);
+    }
+
     for (const [category, booked] of glByCategory) {
       if (!y.pools.some((p) => p.category === category)) {
         push("T1", y.year, booked, `${cents(booked)} sits in the general ledger under a caption the reconciliation never bills`, category);
