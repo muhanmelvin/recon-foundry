@@ -29,8 +29,8 @@ import { validateScenarioConfig } from "../src/engine/model/bounds.ts";
 import { buildPackageZip } from "../src/engine/package/packager.ts";
 import { checkTies } from "../src/engine/model/ties.ts";
 import { taxBorneIn, taxCreditsIn, billsServing, installmentsIn } from "../src/engine/model/tax.ts";
-import { VARIANT_CATALOG, VARIANT_IDS, type VariantId } from "../src/engine/model/variants.ts";
-import { renderTaxBackup } from "../src/engine/render/documents.ts";
+import { VARIANT_CATALOG, VARIANT_IDS, variantsFor, type VariantId } from "../src/engine/model/variants.ts";
+import { renderInsuranceBackup, renderTaxBackup } from "../src/engine/render/documents.ts";
 import type { ScenarioConfig, ScenarioModel } from "../src/engine/model/types.ts";
 
 const BASE: ScenarioConfig = {
@@ -43,13 +43,20 @@ const BASE: ScenarioConfig = {
 };
 
 const TAX_IDS: VariantId[] = ["tax_fiscal_year", "tax_quarterly", "tax_supplemental"];
+const INSURANCE_IDS: VariantId[] = ["insurance_itemized", "insurance_installments", "insurance_fees_quarterly"];
 
-/** Every combination of the tax variants, named for what it turns on. */
-const COMBINATIONS: Array<[string, VariantId[]]> = [];
-for (let mask = 0; mask < 1 << TAX_IDS.length; mask += 1) {
-  const on = TAX_IDS.filter((_, i) => mask & (1 << i));
-  COMBINATIONS.push([on.length === 0 ? "no variant" : on.join(" + "), on]);
+/** Every combination of a tab's variants, named for what it turns on. */
+function combinationsOf(ids: VariantId[]): Array<[string, VariantId[]]> {
+  const out: Array<[string, VariantId[]]> = [];
+  for (let mask = 0; mask < 1 << ids.length; mask += 1) {
+    const on = ids.filter((_, i) => mask & (1 << i));
+    out.push([on.length === 0 ? "no variant" : on.join(" + "), on]);
+  }
+  return out;
 }
+
+const COMBINATIONS = combinationsOf(TAX_IDS);
+const INSURANCE_COMBINATIONS = combinationsOf(INSURANCE_IDS);
 
 const modelWith = (variants: VariantId[], over: Partial<ScenarioConfig> = {}): ScenarioModel =>
   buildCleanModel({ ...BASE, ...over, ...(variants.length > 0 ? { variants } : {}) });
@@ -67,12 +74,17 @@ describe("the catalog", () => {
     expect([...VARIANT_IDS]).toEqual(VARIANT_CATALOG.map((v) => v.id));
   });
 
-  it("gives every variant a tab, a title and a line of its own", () => {
+  it("gives every variant a title and a line of its own, on a tab that offers it", () => {
     for (const v of VARIANT_CATALOG) {
       expect(v.title.length).toBeGreaterThan(0);
       expect(v.hint.length).toBeGreaterThan(0);
-      expect(v.tab).toBe("tax");
+      expect(variantsFor(v.tab).map((x) => x.id)).toContain(v.id);
     }
+  });
+
+  it("offers three forms beside each of the two backups it varies", () => {
+    expect(variantsFor("tax").map((v) => v.id)).toEqual(TAX_IDS);
+    expect(variantsFor("insurance").map((v) => v.id)).toEqual(INSURANCE_IDS);
   });
 });
 
@@ -285,6 +297,118 @@ describe("a variant plants no finding", () => {
     expect(new Set(broken.map((b) => b.tie))).toEqual(new Set(["T4"]));
     const year = model.years[model.years.length - 1]!.year;
     expect(taxCreditsIn(model.tax_parcels, year)).toBeGreaterThan(0);
+  });
+});
+
+describe("the carrier bills its own way, and the premium is the premium", () => {
+  const plain = modelWith([]);
+
+  it.each(INSURANCE_COMBINATIONS)("%s bills the same insurance in every year", (_name, variants) => {
+    const model = modelWith(variants);
+    for (const [k, y] of model.years.entries()) {
+      const line = sum(y.pools.filter((p) => p.section === "Insurance").map((p) => p.amount_cents));
+      const was = sum(plain.years[k]!.pools.filter((p) => p.section === "Insurance").map((p) => p.amount_cents));
+      expect(line, `Insurance line for ${y.year}`).toEqual(was);
+      expect(y.recon.tenant_total_cents).toEqual(plain.years[k]!.recon.tenant_total_cents);
+    }
+  });
+
+  it.each(INSURANCE_COMBINATIONS)("%s holds all seven ties", (_name, variants) => {
+    expect(checkTies(modelWith(variants))).toEqual([]);
+  });
+
+  it.each(INSURANCE_COMBINATIONS)("%s books in the ledger exactly what the carrier charged", (_name, variants) => {
+    const model = modelWith(variants);
+    for (const [k, y] of model.years.entries()) {
+      const py = model.insurance.years[k]!;
+      const booked = sum(y.gl.filter((g) => g.category === "Property insurance").map((g) => g.amount_cents));
+      expect(booked).toEqual(py.premium_cents + py.fees_cents);
+      for (const g of y.gl.filter((x) => x.category === "Property insurance")) {
+        expect(g.date.slice(0, 4), "a charge booked outside its own year").toEqual(String(y.year));
+      }
+    }
+  });
+
+  it.each(INSURANCE_COMBINATIONS)("%s adds up on the carrier's own invoice", (_name, variants) => {
+    const model = modelWith(variants);
+    for (const py of model.insurance.years) {
+      if (py.lines) expect(sum(py.lines.map((l) => l.premium_cents))).toEqual(py.premium_cents);
+      if (py.installments) expect(sum(py.installments.map((i) => i.amount_cents))).toEqual(py.premium_cents);
+      if (py.fee_installments) expect(sum(py.fee_installments.map((f) => f.amount_cents))).toEqual(py.fees_cents);
+      for (const i of py.installments ?? []) expect(i.amount_cents).toBeGreaterThan(0);
+      for (const f of py.fee_installments ?? []) expect(f.amount_cents).toBeGreaterThan(0);
+      for (const l of py.lines ?? []) expect(l.premium_cents).toBeGreaterThan(0);
+    }
+  });
+
+  it("prices the programme coverage by coverage, and declares the layers it bought", () => {
+    const model = modelWith(["insurance_itemized"]);
+    const page = renderInsuranceBackup(model, model.years[0]!.year).bytes as string;
+    expect(model.insurance.coverages.map((c) => c.coverage)).toContain("Umbrella liability — per occurrence");
+    expect(model.insurance.coverages.map((c) => c.coverage)).toContain("Terrorism (TRIA) — property and liability");
+    expect(page).toContain("Terrorism (TRIA) — annual premium");
+    expect(page).toContain("Total annual premium");
+  });
+
+  it("finances the premium from the policy's own inception, inside the year", () => {
+    const model = modelWith(["insurance_installments"]);
+    const start = model.insurance.period_start_month;
+    for (const py of model.insurance.years) {
+      expect(py.installments![0]!.label).toBe("Down payment");
+      expect(py.installments![0]!.due.slice(5, 7)).toEqual(String(start).padStart(2, "0"));
+      expect(py.installments).toHaveLength(13 - start);
+      const down = py.installments![0]!.amount_cents / py.premium_cents;
+      expect(down).toBeGreaterThan(0.15);
+      expect(down).toBeLessThan(0.35);
+    }
+    const page = renderInsuranceBackup(model, model.years[0]!.year).bytes as string;
+    expect(page).toContain("Payment schedule");
+    expect(page).toContain("The premium is financed over the policy year");
+  });
+
+  it("collects the fees quarterly, never before the policy incepts", () => {
+    const model = modelWith(["insurance_fees_quarterly"]);
+    const start = model.insurance.period_start_month;
+    const expected = [3, 6, 9, 12].map((m, i) => ({ m, label: `Q${i + 1} fees` })).filter((q) => q.m >= start);
+    for (const py of model.insurance.years) {
+      expect(py.fee_installments).toHaveLength(expected.length);
+      expect(py.fee_installments!.map((f) => f.label)).toEqual(expected.map((q) => q.label));
+      for (const f of py.fee_installments!) expect(Number(f.due.slice(5, 7))).toBeGreaterThanOrEqual(start);
+    }
+    expect(renderInsuranceBackup(model, model.years[0]!.year).bytes as string).toContain("Fee schedule");
+  });
+
+  it.each(INSURANCE_COMBINATIONS)("%s charges nothing before the policy incepts", (_name, variants) => {
+    const model = modelWith(variants);
+    const start = model.insurance.period_start_month;
+    for (const py of model.insurance.years) {
+      for (const c of [...(py.installments ?? []), ...(py.fee_installments ?? [])]) {
+        expect(Number(c.due.slice(5, 7)), `${c.label} in ${py.year}`).toBeGreaterThanOrEqual(start);
+      }
+    }
+  });
+
+  it.each(INSURANCE_COMBINATIONS)("%s forges the same insurance backup from an empty list", (_name, _v) => {
+    const absent = modelWith([]);
+    const empty = buildCleanModel({ ...BASE, variants: [] });
+    for (const y of absent.years) {
+      expect(renderInsuranceBackup(empty, y.year).bytes).toEqual(renderInsuranceBackup(absent, y.year).bytes);
+    }
+  });
+});
+
+describe("every form at once", () => {
+  it("changes both backups and neither figure", () => {
+    const plain = modelWith([]);
+    const all = modelWith([...VARIANT_IDS]);
+    expect(checkTies(all)).toEqual([]);
+    for (const [k, y] of all.years.entries()) {
+      expect(y.recon.pool_total_cents).toEqual(plain.years[k]!.recon.pool_total_cents);
+      expect(y.recon.tenant_total_cents).toEqual(plain.years[k]!.recon.tenant_total_cents);
+    }
+    const year = all.years[all.years.length - 1]!.year;
+    expect(renderTaxBackup(all, year).bytes).not.toEqual(renderTaxBackup(plain, year).bytes);
+    expect(renderInsuranceBackup(all, year).bytes).not.toEqual(renderInsuranceBackup(plain, year).bytes);
   });
 });
 

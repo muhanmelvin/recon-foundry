@@ -25,14 +25,17 @@
 import type { ScenarioConfig } from "./types.ts";
 
 export type VariantId =
-  | "tax_fiscal_year" //   the county's year runs July to June
-  | "tax_quarterly" //     four instalments, the first two estimated
-  | "tax_supplemental"; // a reassessment billed on its own
+  | "tax_fiscal_year" //        the county's year runs July to June
+  | "tax_quarterly" //          four instalments, the first two estimated
+  | "tax_supplemental" //       a reassessment billed on its own
+  | "insurance_itemized" //     the premium broken out by coverage
+  | "insurance_installments" // a down payment and monthly instalments
+  | "insurance_fees_quarterly"; // the policy fees collected in quarters
 
 export interface VariantSpec {
   id: VariantId;
   /** The document tab whose rail offers it. */
-  tab: "tax";
+  tab: "tax" | "insurance";
   title: string;
   /** One line, in the words an auditor would use for it. */
   hint: string;
@@ -57,6 +60,24 @@ export const VARIANT_CATALOG: readonly VariantSpec[] = Object.freeze([
     tab: "tax",
     title: "A supplemental bill",
     hint: "A reassessment mid-term, billed separately and over and above the year's bill.",
+  },
+  {
+    id: "insurance_itemized",
+    tab: "insurance",
+    title: "A premium itemised by coverage",
+    hint: "Property, liability, umbrella and terrorism priced line by line rather than as one figure.",
+  },
+  {
+    id: "insurance_installments",
+    tab: "insurance",
+    title: "A down payment and instalments",
+    hint: "The premium financed the way a broker bills a master programme, not paid at inception.",
+  },
+  {
+    id: "insurance_fees_quarterly",
+    tab: "insurance",
+    title: "Fees collected quarterly",
+    hint: "Policy fees and surplus lines tax spread over four charges instead of one.",
   },
 ]);
 

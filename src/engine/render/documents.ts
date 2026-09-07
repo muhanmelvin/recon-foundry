@@ -326,6 +326,29 @@ export function renderInsuranceBackup(model: ScenarioModel, year: number): Artif
   const py = p.years.find((x) => x.year === year);
   if (!py) throw new Error(`no insurance year ${year}`);
   const start = `${year}-${String(p.period_start_month).padStart(2, "0")}-01`;
+  const term = `${monthName(p.period_start_month)} ${year} to ${monthName(p.period_start_month)} ${year + 1}`;
+
+  // A carrier that prices coverage by coverage bills that way too; one that
+  // writes a package policy bills the package. Either adds to the premium.
+  const premiumRows = py.lines
+    ? py.lines
+        .map((l) => `<tr><td>${esc(l.coverage)} — annual premium, ${esc(term)}</td><td class="num">${usd(l.premium_cents)}</td></tr>`)
+        .join("") + `<tr class="sub"><td>Total annual premium</td><td class="num">${usd(py.premium_cents)}</td></tr>`
+    : `<tr><td>Annual premium — commercial property and general liability, ${term}</td><td class="num">${usd(py.premium_cents)}</td></tr>`;
+
+  const schedule = py.installments
+    ? `<h2>Payment schedule</h2><table><thead><tr><th>Charge</th><th>Due</th><th class="num">Amount</th></tr></thead><tbody>` +
+      py.installments.map((i) => `<tr><td>${esc(i.label)}</td><td>${esc(longDate(i.due))}</td><td class="num">${usd(i.amount_cents)}</td></tr>`).join("") +
+      (py.fee_installments ?? []).map((f) => `<tr><td>${esc(f.label)}</td><td>${esc(longDate(f.due))}</td><td class="num">${usd(f.amount_cents)}</td></tr>`).join("") +
+      `<tr class="total"><td colspan="2">Total charged for the policy year</td><td class="num">${usd(py.premium_cents + py.fees_cents)}</td></tr>` +
+      `</tbody></table>` +
+      `<p class="small">The premium is financed over the policy year. Each instalment is a charge in the month it falls due, which is where the general ledger books it.</p>`
+    : py.fee_installments
+      ? `<h2>Fee schedule</h2><table><thead><tr><th>Charge</th><th>Due</th><th class="num">Amount</th></tr></thead><tbody>` +
+        py.fee_installments.map((f) => `<tr><td>${esc(f.label)}</td><td>${esc(longDate(f.due))}</td><td class="num">${usd(f.amount_cents)}</td></tr>`).join("") +
+        `<tr class="total"><td>Total fees for the policy year</td><td class="num" colspan="2">${usd(py.fees_cents)}</td></tr>` +
+        `</tbody></table>`
+      : "";
 
   const invoice =
     `<div class="page">` +
@@ -334,11 +357,12 @@ export function renderInsuranceBackup(model: ScenarioModel, year: number): Artif
     `<div class="addr"><div class="name">${esc(u.landlord_entity)}</div><div>${esc(u.property_name)}</div>` +
     `<div>${esc(u.address.line1)}, ${esc(u.address.city)}, ${esc(u.address.state_abbr)} ${esc(u.address.zip)}</div></div>` +
     `<table><thead><tr><th>Description</th><th class="num">Amount</th></tr></thead><tbody>` +
-    `<tr><td>Annual premium — commercial property and general liability, ${monthName(p.period_start_month)} ${year} to ${monthName(p.period_start_month)} ${year + 1}</td><td class="num">${usd(py.premium_cents)}</td></tr>` +
+    premiumRows +
     `<tr><td>Policy fee and surplus lines tax</td><td class="num">${usd(py.fees_cents)}</td></tr>` +
     `<tr class="total"><td>Total due</td><td class="num">${usd(py.premium_cents + py.fees_cents)}</td></tr>` +
     `</tbody></table>` +
     `<p class="small">Premium is fully earned at inception. The declaration page overleaf states the coverages, limits and deductibles this premium buys.</p>` +
+    schedule +
     notice() +
     `</div>`;
 
@@ -355,6 +379,7 @@ export function renderInsuranceBackup(model: ScenarioModel, year: number): Artif
     `</tbody></table>` +
     `<h2>Premium</h2><dl class="facts">` +
     rows([
+      ...(py.lines ? py.lines.map((l) => ({ label: `${l.coverage} premium`, value: usd(l.premium_cents) })) : []),
       { label: "Annual premium", value: usd(py.premium_cents) },
       { label: "Policy fee and surplus lines tax", value: usd(py.fees_cents) },
       { label: "Total", value: usd(py.premium_cents + py.fees_cents) },

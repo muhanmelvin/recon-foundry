@@ -294,11 +294,26 @@ export interface TaxParcel {
   years: TaxParcelYear[];
 }
 
+/**
+ * One policy year, and the shapes a carrier's invoice for it can take.
+ *
+ * The three optional fields are Variants and follow the Variant rule: the
+ * premium and the fees are what they always were, and what changes is how the
+ * invoice presents them. `lines` add to `premium_cents`; `installments` add to
+ * `premium_cents`; `fee_installments` add to `fees_cents`. Tie T5 asks the same
+ * question of the invoice either way.
+ */
 export interface InsurancePolicyYear {
   year: number;
   premium_cents: number;
   fees_cents: number;
   invoice_number: string;
+  /** The premium broken out by coverage, where the carrier prices it that way. */
+  lines?: Array<{ coverage: string; premium_cents: number }>;
+  /** A down payment and monthly instalments, where the premium is financed. */
+  installments?: Array<{ due: string; label: string; amount_cents: number }>;
+  /** The policy fees collected in quarters rather than at inception. */
+  fee_installments?: Array<{ due: string; label: string; amount_cents: number }>;
 }
 
 export interface InsurancePolicy {

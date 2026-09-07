@@ -494,6 +494,11 @@ function fiscalBills(
  * The one place the two square footages both appear. A premium is an operating
  * expense and moves with `basis`; a coverage limit is a statement about what the
  * building is worth to rebuild, and moves with the building.
+ *
+ * The variants here change the invoice and never the invoice's total. A premium
+ * itemised by coverage adds up to the premium; a premium financed over a down
+ * payment and instalments adds up to the premium; fees collected in quarters add
+ * up to the fees. Tie T5 asks the carrier's paper for the same figure either way.
  */
 function buildInsurance(config: ScenarioConfig, rng: Rng, gla: number, basis: number, years: number[], carrier: string, policy: string): InsurancePolicy {
   const premiums: number[] = [];
@@ -501,22 +506,88 @@ function buildInsurance(config: ScenarioConfig, rng: Rng, gla: number, basis: nu
   for (let k = 0; k < years.length; k++) {
     premiums.push(k === 0 ? base : Math.round(premiums[k - 1]! * (1 + rng.child("growth/" + years[k]).float(0.025, 0.075))));
   }
+
+  const itemized = hasVariant(config, "insurance_itemized");
+  const financed = hasVariant(config, "insurance_installments");
+  const quarterlyFees = hasVariant(config, "insurance_fees_quarterly");
+  const startMonth = rng.child("period").pick([1, 4, 7]);
+
   return {
     carrier,
     policy_number: policy,
-    period_start_month: rng.child("period").pick([1, 4, 7]),
+    period_start_month: startMonth,
     coverages: [
       { coverage: "Commercial property — special form", limit_cents: Math.round(gla * 145) * 100, deductible_cents: 2_500_00 },
       { coverage: "Commercial general liability — per occurrence", limit_cents: 1_000_000_00, deductible_cents: 0 },
       { coverage: "Commercial general liability — aggregate", limit_cents: 2_000_000_00, deductible_cents: 0 },
       { coverage: "Business income & extra expense", limit_cents: Math.round(gla * 12) * 100, deductible_cents: 0 },
+      // A carrier that prices coverage by coverage is placing a programme, and a
+      // programme carries the layers a single package policy leaves out.
+      ...(itemized
+        ? [
+            { coverage: "Umbrella liability — per occurrence", limit_cents: 5_000_000_00, deductible_cents: 0 },
+            { coverage: "Terrorism (TRIA) — property and liability", limit_cents: Math.round(gla * 145) * 100, deductible_cents: 0 },
+          ]
+        : []),
     ],
     years: years.map((year, k) => {
       const premium = premiums[k]!;
       const fees = mulRate(premium, rng.child("fees/" + year).float(0.012, 0.028));
-      return { year, premium_cents: premium, fees_cents: fees, invoice_number: `INV-${year}-${rng.child("inv/" + year).int(10_000, 99_999)}` };
+      const pr = rng.child("policy/" + year);
+      return {
+        year,
+        premium_cents: premium,
+        fees_cents: fees,
+        invoice_number: `INV-${year}-${rng.child("inv/" + year).int(10_000, 99_999)}`,
+        ...(itemized ? { lines: premiumLines(premium) } : {}),
+        ...(financed ? { installments: premiumInstallments(pr, premium, year, startMonth) } : {}),
+        ...(quarterlyFees ? { fee_installments: feeInstallments(pr, fees, year, startMonth) } : {}),
+      };
     }),
   };
+}
+
+/**
+ * The premium priced coverage by coverage. The weights are a programme's usual
+ * shape — property is most of it, then the primary casualty layer, then the
+ * excess and the terrorism certification — and they add to the premium exactly.
+ */
+function premiumLines(premium: number): Array<{ coverage: string; premium_cents: number }> {
+  const captions = ["Commercial property", "Commercial general liability", "Umbrella liability", "Terrorism (TRIA)"];
+  return allocate(premium, [58, 22, 12, 8]).map((amount, i) => ({ coverage: captions[i]!, premium_cents: amount }));
+}
+
+/**
+ * A down payment at inception and monthly instalments after it, all inside the
+ * calendar year — a broker's schedule runs from the policy's own start, so a
+ * policy incepting in July is nine instalments shorter than one incepting in
+ * January. The parts add to the premium exactly.
+ */
+function premiumInstallments(pr: Rng, premium: number, year: number, startMonth: number): Array<{ due: string; label: string; amount_cents: number }> {
+  const months = 12 - startMonth;
+  const down = Math.round(premium * pr.child("down").float(0.2, 0.3));
+  const rest = allocate(premium - down, Array.from({ length: months }, () => 1));
+  const day = pr.child("day").int(5, 15);
+  return [
+    { due: iso(year, startMonth, day), label: "Down payment", amount_cents: down },
+    ...rest.map((amount, i) => ({ due: iso(year, startMonth + i + 1, day), label: `Instalment ${i + 1} of ${months}`, amount_cents: amount })),
+  ];
+}
+
+/**
+ * The policy fees and the surplus lines tax, collected a quarter at a time —
+ * the quarters that end on or after the policy incepts, because nothing is
+ * collected before there is a policy to collect it for. A January policy pays
+ * four, a July one pays two, and either way they add to the year's fees.
+ */
+function feeInstallments(pr: Rng, fees: number, year: number, startMonth: number): Array<{ due: string; label: string; amount_cents: number }> {
+  const day = pr.child("fee-day").int(8, 18);
+  const quarters = [3, 6, 9, 12].map((month, i) => ({ month, label: `Q${i + 1} fees` })).filter((q) => q.month >= startMonth);
+  return allocate(fees, quarters.map(() => 1)).map((amount, i) => ({
+    due: iso(year, quarters[i]!.month, day),
+    label: quarters[i]!.label,
+    amount_cents: amount,
+  }));
 }
 
 // ---------------------------------------------------------------------------
@@ -877,29 +948,37 @@ function taxGl(parcels: readonly TaxParcel[], universe: Universe, year: number):
   return out;
 }
 
+/**
+ * The ledger books the carrier's invoice the way the carrier billed it: one
+ * charge for the premium, or a coverage at a time, or a down payment and its
+ * instalments — and the fees at inception or a quarter at a time. However it is
+ * cut, it sums to the premium and the fees, which is what tie T1 asks of it.
+ */
 function insuranceGl(policy: InsurancePolicy, universe: Universe, year: number, k: number): GLEntry[] {
   const y = policy.years[k]!;
   const m = policy.period_start_month;
-  return [
-    {
-      year,
-      date: iso(year, m, 12),
-      account: universe.gl_accounts["Property insurance"]!,
-      category: "Property insurance",
-      vendor: policy.carrier,
-      memo: `Policy ${policy.policy_number} — annual premium, invoice ${y.invoice_number}`,
-      amount_cents: y.premium_cents,
-    },
-    {
-      year,
-      date: iso(year, m, 12),
-      account: universe.gl_accounts["Property insurance"]!,
-      category: "Property insurance",
-      vendor: policy.carrier,
-      memo: `Policy ${policy.policy_number} — policy fee and surplus lines tax`,
-      amount_cents: y.fees_cents,
-    },
-  ];
+  const account = universe.gl_accounts["Property insurance"]!;
+  const entry = (date: string, memo: string, amount_cents: number): GLEntry => ({
+    year,
+    date,
+    account,
+    category: "Property insurance",
+    vendor: policy.carrier,
+    memo,
+    amount_cents,
+  });
+
+  const premium = y.installments
+    ? y.installments.map((i) => entry(i.due, `Policy ${policy.policy_number} — ${i.label.toLowerCase()}, invoice ${y.invoice_number}`, i.amount_cents))
+    : y.lines
+      ? y.lines.map((l) => entry(iso(year, m, 12), `Policy ${policy.policy_number} — ${l.coverage.toLowerCase()} premium, invoice ${y.invoice_number}`, l.premium_cents))
+      : [entry(iso(year, m, 12), `Policy ${policy.policy_number} — annual premium, invoice ${y.invoice_number}`, y.premium_cents)];
+
+  const fees = y.fee_installments
+    ? y.fee_installments.map((f) => entry(f.due, `Policy ${policy.policy_number} — policy fee and surplus lines tax, ${f.label.toLowerCase()}`, f.amount_cents))
+    : [entry(iso(year, m, 12), `Policy ${policy.policy_number} — policy fee and surplus lines tax`, y.fees_cents)];
+
+  return [...premium, ...fees];
 }
 
 function amortizationGl(p: CapitalProject, universe: Universe, year: number): GLEntry[] {
