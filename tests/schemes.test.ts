@@ -15,6 +15,7 @@ import { forge } from "../src/engine/forge.ts";
 import { checkTies } from "../src/engine/model/ties.ts";
 import { toScannerManifest } from "../src/engine/model/answer-key.ts";
 import { SCHEME_ORDER, type ScenarioConfig, type SchemeId, type TieId } from "../src/engine/model/types.ts";
+import { taxBorneIn, taxCreditsIn } from "../src/engine/model/tax.ts";
 import { sweep } from "./helpers/sweep.ts";
 
 const BASES = sweep().slice(0, 9);
@@ -25,7 +26,7 @@ function withSchemes(base: ScenarioConfig, schemes: SchemeId[]): ScenarioConfig 
 
 const SETS: Array<[string, SchemeId[]]> = [
   ...SCHEME_ORDER.map((s) => [s, [s]] as [string, SchemeId[]]),
-  ["all five", [...SCHEME_ORDER]],
+  ["every scheme", [...SCHEME_ORDER]],
   ["cap and migration", ["above_cap_billing", "bucket_migration"]],
   ["capital and fee", ["unamortized_capital", "fee_base_expansion"]],
 ];
@@ -62,20 +63,73 @@ describe("a scheme breaks exactly the ties it declares", () => {
 
 describe("each scheme breaks the tie its lesson is about", () => {
   const expected: Record<SchemeId, TieId[]> = {
-    // Four of the five are only visible by reading the lease. That is the point:
+    // Four of them are only visible by reading the lease. That is the point:
     // the arithmetic is right and the entitlement is wrong.
     unamortized_capital: ["T7"],
     above_cap_billing: ["T7"],
     fee_base_expansion: ["T7"],
     bucket_migration: ["T7"],
-    // The fifth is the opposite case: the lease arithmetic is untouched, and the
-    // only thing that gives it away is the tax backup not netting to the tax line.
+    // The tax pair are the opposite case: the lease arithmetic is untouched, and
+    // the only thing that gives either away is the tax backup not reconciling to
+    // the tax line — a refund netted out of one, a budget never trued up in the
+    // other.
     kept_tax_refund: ["T4"],
+    budget_tax_billing: ["T4"],
   };
 
   it.each(SCHEME_ORDER.map((s) => [s, s] as const))("%s", (_n, scheme) => {
     const { model } = forge(withSchemes(BASES[0]!, [scheme]));
     expect(model.planted[0]!.seams).toEqual(expected[scheme]);
+  });
+});
+
+describe("taxes billed at budget, and never trued up", () => {
+  const base = BASES[0]!;
+
+  it("bills more than the county levied, every year, and books the accrual for it", () => {
+    const { model, answerKey } = forge(withSchemes(base, ["budget_tax_billing"]));
+    expect(answerKey.findings).toHaveLength(model.years.length);
+    for (const y of model.years) {
+      const line = y.pools.find((p) => p.section === "Taxes")!;
+      const levied = taxBorneIn(model.tax_parcels, y.year);
+      expect(line.amount_cents, `${y.year} tax line`).toBeGreaterThan(levied);
+      // Six to eleven points: enough to be worth finding, not enough for a
+      // year-over-year test to ask about it on its own.
+      expect(line.amount_cents / levied).toBeLessThan(1.12);
+
+      // The ledger agrees with the statement, which is what makes it a cover.
+      const tax = y.gl.filter((g) => g.category === "Real estate taxes");
+      expect(tax).toHaveLength(12);
+      expect(tax.reduce((a, g) => a + g.amount_cents, 0)).toEqual(line.amount_cents);
+      for (const g of tax) expect(g.memo).toContain("accrual");
+      // Nothing in the ledger reverses the accrual against the county's bill.
+      expect(tax.some((g) => /true|reversal|bill/i.test(g.memo))).toBe(false);
+    }
+  });
+
+  it("is the check the tax backup makes possible, asked rather than asserted", () => {
+    const { answerKey } = forge(withSchemes(base, ["budget_tax_billing"]));
+    for (const f of answerKey.findings) {
+      expect(f.check_id).toBe("RF-13");
+      // Undocumented: the backup says a smaller number, but nothing in it
+      // proves the difference is not a timing difference. The scanner asks.
+      expect(f.severity).toBe("review");
+      expect(f.expected_impact_range![0]).toBeGreaterThan(0);
+    }
+    expect(answerKey.expected_scanner.document_only).toBe(0);
+    expect(answerKey.total_planted_tenant_impact_cents).toBeGreaterThan(0);
+  });
+
+  it("prices the overcharge as the whole of the gap, alongside a kept refund", () => {
+    // Both schemes are RF-13 in the same year and the scanner raises one
+    // finding for the pair, so the truth ledger has to price the two together.
+    const { model, answerKey } = forge(withSchemes(base, ["budget_tax_billing", "kept_tax_refund"]));
+    const last = model.years[model.years.length - 1]!.year;
+    const truth = answerKey.ledger[last]!;
+    const levied = taxBorneIn(model.tax_parcels, last);
+    const credited = taxCreditsIn(model.tax_parcels, last);
+    expect(truth.tax_correct).toEqual(levied - credited);
+    expect(truth.tax_billed - truth.tax_correct).toBeGreaterThan(credited);
   });
 });
 

@@ -43,11 +43,13 @@ const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const DEFAULT_OUT = resolve(root, "..", "red-flag-scanner", "tests", "fixtures", "foundry");
 
 /**
- * Three packages, chosen for what they make the scanner do rather than for
- * variety: one that must produce nothing at all, one that exercises the cap
- * ladder and a line changing pools, and one carrying every scheme — the kept
- * tax refund included, which since schema 1.1 travels with its tax backup and
- * is expected as an RF-13 finding rather than declared document-only.
+ * Packages chosen for what they make the scanner do rather than for variety:
+ * one that must produce nothing at all, one that exercises the cap ladder and a
+ * line changing pools, one carrying the original five schemes — the kept tax
+ * refund included, which since schema 1.1 travels with its tax backup and is
+ * expected as an RF-13 finding rather than declared document-only — and one for
+ * each scheme added since, so a new way of being wrong is pinned against the
+ * real engine on the commit that adds it.
  */
 const FIXTURES = [
   {
@@ -71,6 +73,11 @@ const FIXTURES = [
       size_band: "medium",
       schemes: ["unamortized_capital", "above_cap_billing", "fee_base_expansion", "bucket_migration", "kept_tax_refund"],
     },
+  },
+  {
+    name: "budget-tax",
+    note: "Real estate taxes billed at the landlord's budget and never trued up to the county's bill — RF-13 from the other direction.",
+    config: { seed: "fixture-budget-1", start_year: 2023, year_count: 3, property_kind: "retail_strip", size_band: "medium", schemes: ["budget_tax_billing"] },
   },
 ];
 

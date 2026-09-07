@@ -171,6 +171,7 @@ function storyOf(model: ScenarioModel): string {
     fee_base_expansion: "a fee on a base the lease does not permit",
     bucket_migration: "a controllable cost moved out of the capped pool",
     kept_tax_refund: "a tax refund kept",
+    budget_tax_billing: "taxes billed at budget and never trued up",
   };
   const list = model.config.schemes.map((s) => named[s] ?? s);
   const last = list.pop()!;

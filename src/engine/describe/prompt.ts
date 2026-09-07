@@ -59,6 +59,8 @@ export const SCHEME_PROMPT_HINTS: Record<SchemeId, string> = {
     "a cost that used to be inside the capped category quietly reappearing outside it under a new name, at about the same money",
   kept_tax_refund:
     "a property-tax appeal that won a refund the landlord kept, while the tenant went on paying a share of the original bill",
+  budget_tax_billing:
+    "a real-estate-tax charge that looks like an estimate every year and is never corrected to the bill the county actually sent",
 };
 
 const OUTPUT_SHAPE = `{
@@ -72,7 +74,7 @@ const OUTPUT_SHAPE = `{
     "opex_psf_target":   { "value": 12.5, "quote": "..." },
     "story":             { "value": "one sentence, invented names only", "quote": "..." }
   },
-  "schemes": [ { "scheme": "ONE OF THE FIVE", "quote": "..." } ]
+  "schemes": [ { "scheme": "ONE OF THE NAMED SCHEMES", "quote": "..." } ]
 }`;
 
 /** 70 dashes. The line the description starts under. */
@@ -94,7 +96,7 @@ export function buildDescribePrompt(description: string): string {
     `5. THE STORY USES INVENTED NAMES ONLY. One sentence, at most ${STORY_MAX_CHARS} characters, naming no real company, person, place or brand — not the writer's own. The generator names everything itself from a synthetic bank; a real name in the story would be the one piece of the writer's world to survive into the package, and it must not.`,
     "6. Output ONLY the JSON object below. No prose before or after, no markdown fences.",
     "",
-    "THE FIVE SCHEMES (use these names, no others):",
+    "THE SCHEMES (use these names, no others):",
     ...SCHEME_ORDER.map((id) => `- ${id}: ${SCHEME_PROMPT_HINTS[id]}`),
     "",
     "THE FIELDS:",

@@ -22,7 +22,7 @@
 
 import type { AnswerFinding, ScenarioModel, SchemeId } from "./types.ts";
 import { feeBaseCents, leaseLadder, mulRate, sumCents } from "./recompute.ts";
-import { taxCreditsIn } from "./tax.ts";
+import { taxBorneIn, taxCreditsIn } from "./tax.ts";
 import { scannerFeeBaseCents } from "../scanner-rules.ts";
 
 export interface YearTruth {
@@ -104,10 +104,11 @@ export function correctFigures(model: ScenarioModel): Record<number, YearTruth> 
       const project = model.capital_projects.find((c) => !c.amortized && c.statement_caption === p.category);
       if (project) amount = Math.round(project.total_cost_cents / model.lease.capital_life_years);
 
-      // A tax refund the backup shows but the statement never netted.
+      // What the county levied, net of what it credited back — which is what
+      // §6.06 reconciles against, whether the statement billed the levy gross
+      // of a refund or billed a budget it never trued up to the bill at all.
       if (p.section === "Taxes") {
-        const credits = taxCreditsIn(model.tax_parcels, y.year);
-        amount -= credits;
+        amount = taxBorneIn(model.tax_parcels, y.year) - taxCreditsIn(model.tax_parcels, y.year);
       }
 
       // A category that changed class between years: the lease fixes the class.

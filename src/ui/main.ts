@@ -116,7 +116,7 @@ const SCHEME_COPY: Record<SchemeId, { title: string; blurb: string }> = {
   },
   fee_base_expansion: {
     title: "A fee on a base the lease forbids",
-    blurb: "The right percentage, on everything — taxes and insurance included. The quietest of the five.",
+    blurb: "The right percentage, on everything — taxes and insurance included. The quietest of them all.",
   },
   bucket_migration: {
     title: "A cost moved out of the capped pool",
@@ -125,6 +125,10 @@ const SCHEME_COPY: Record<SchemeId, { title: string; blurb: string }> = {
   kept_tax_refund: {
     title: "A tax refund kept",
     blurb: "Only the collector's account statement shows it. RF-13 reads that backup; a workbook cannot carry one.",
+  },
+  budget_tax_billing: {
+    title: "Taxes billed at budget",
+    blurb: "The estimate never becomes an actual. Twelve accruals, no true-up, and the county's bill says less.",
   },
 };
 
@@ -382,7 +386,7 @@ function forgePanel(): HTMLElement {
       "div",
       { class: "row" },
       h("button", { type: "button", class: "ghost", onclick: () => { state.config.schemes = []; reforge(); } }, "Clean package"),
-      h("button", { type: "button", class: "ghost", onclick: () => { state.config.schemes = [...SCHEME_ORDER]; reforge(); } }, "All five"),
+      h("button", { type: "button", class: "ghost", onclick: () => { state.config.schemes = [...SCHEME_ORDER]; reforge(); } }, "All of them"),
     ),
     h(
       "p",

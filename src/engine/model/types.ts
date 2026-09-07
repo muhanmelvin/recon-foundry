@@ -29,7 +29,8 @@ export type SchemeId =
   | "above_cap_billing" //   → RF-06
   | "fee_base_expansion" //  → RF-07
   | "bucket_migration" //    → RF-04 (with RF-02 and RF-03)
-  | "kept_tax_refund"; //    → RF-13, and only through the tax backup the JSON carries
+  | "kept_tax_refund" //     → RF-13, and only through the tax backup the JSON carries
+  | "budget_tax_billing"; // → RF-13, from the other direction: billed at budget, never trued up
 
 /** Canonical order. `applySchemes` follows it, so a combination is deterministic. */
 export const SCHEME_ORDER: readonly SchemeId[] = Object.freeze([
@@ -38,6 +39,7 @@ export const SCHEME_ORDER: readonly SchemeId[] = Object.freeze([
   "fee_base_expansion",
   "bucket_migration",
   "kept_tax_refund",
+  "budget_tax_billing",
 ]);
 
 export interface ScenarioConfig {

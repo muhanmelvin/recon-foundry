@@ -1,5 +1,5 @@
 /**
- * The five things the invented landlord can be made to do wrong.
+ * The things the invented landlord can be made to do wrong.
  *
  * A scheme is not a wrong number written onto a statement. It is a change to the
  * model — an expense classified differently, a fee charged on a wider base, a
@@ -23,6 +23,7 @@ import { plantAboveCapBilling } from "./above-cap.ts";
 import { plantFeeBaseExpansion } from "./fee-base.ts";
 import { plantBucketMigration } from "./migration.ts";
 import { plantKeptTaxRefund } from "./kept-refund.ts";
+import { plantBudgetTaxBilling } from "./budget-tax.ts";
 
 /**
  * What a scheme returns: what it planted, and how the reconciliation must be
@@ -44,6 +45,7 @@ const SCHEMES: Record<SchemeId, SchemeFn> = {
   fee_base_expansion: plantFeeBaseExpansion,
   bucket_migration: plantBucketMigration,
   kept_tax_refund: plantKeptTaxRefund,
+  budget_tax_billing: plantBudgetTaxBilling,
 };
 
 /**
