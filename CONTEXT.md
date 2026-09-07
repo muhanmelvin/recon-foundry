@@ -91,3 +91,19 @@ tests keep, not a hope.
 **State of Franklin** — the state every forged property stands in. There isn't
 one. It is how a document that otherwise looks entirely real announces that it
 is not.
+
+**Step** — one of the three stations a visitor moves through: **Forge** (choose
+what the package is), **Read** (look at the documents it produced), **Take it
+away** (download it, scan it, see the answers). Steps are not gates; the package
+exists at every one of them, and any step can be reached from any other.
+
+**Rider** — the clauses a visitor adds to the lease beyond its seven numbered
+articles. Numbered R1 onward, after Article VII, so that the articles a finding
+cites never move. A lease nobody added anything to has no Rider.
+
+**Clause** — one selectable provision of the Rider. A clause restates what the
+package already does and never contradicts it; ticking one changes the lease
+and nothing else — no figure, no tie, no finding.
+
+**Provenance** — for one document, what it was built from and which ties it has
+to hold. It is what the page shows instead of pretending the forge takes time.
