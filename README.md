@@ -63,7 +63,7 @@ exactly one, and `tests/schemes.test.ts` holds it to that — a scheme that brok
 tie it did not declare would leave a loose thread a trainee pulls on instead of
 finding the real thing.
 
-## The five schemes
+## The schemes
 
 | Scheme | Breaks | The scanner sees it as |
 |---|---|---|
@@ -71,11 +71,14 @@ finding the real thing.
 | The cap grown on the cap | T7 | RF-06 |
 | A fee on a base the lease forbids | T7 | RF-07 |
 | A cost moved out of the capped pool | T7 | RF-04, with RF-02 and RF-03 |
+| A second fee for the same service | T7 | RF-07's duplication test — an exposure, not a priced overcharge |
 | **A tax refund kept** | **T4** | **RF-13 — but only from the JSON** |
+| Taxes billed at budget, never trued up | T4 | RF-13, from the other direction |
+| **Another property's invoice** | **T1** | **nothing at all — see below** |
 
-Four of the five are visible only by reading the lease: the arithmetic is right
-and the entitlement is wrong. The fifth is the opposite, and it is the one worth
-pointing at.
+Most of them are visible only by reading the lease: the arithmetic is right and
+the entitlement is wrong. The two tax schemes are the opposite, and they are the
+ones worth pointing at.
 
 **RF-13 exists because of the kept tax refund.** For most of this repo's life no
 scanner check could catch it: none of the twelve read a refund or a credit, and
@@ -90,8 +93,41 @@ against it — and the scanner's **RF-13** nets the two.
 
 What has not changed is which document betrays it. Upload the workbook instead of
 the JSON and the scheme is invisible again, because a spreadsheet has nowhere to
-put a tax backup. It is still the best of the five to teach with, for exactly
-that reason: only the paper catches it.
+put a tax backup. It is still one of the best to teach with, for exactly that
+reason: only the paper catches it.
+
+**And the gap is open again, on purpose.** *Another property's invoice* is a
+cost incurred somewhere else, allocated into this property's ledger and
+recovered from a tenant who has never seen the place. There is no arithmetic to
+catch it: the line is the right size, it takes the same share every year, the
+vendor really does work here, and the ledger adds to the statement to the cent.
+The only thing wrong with it is five words in a memo — and the ReconPackage
+carries lines and amounts, not memos, so no check has anything to read. It is
+recorded with `check_id: null` and counted in `document_only_findings`, the same
+way the kept refund was, and it names the check that would close it: allocated
+costs substantiated to the property they were incurred at.
+
+## Variants — the same figure, evidenced differently
+
+Counties do not bill alike, and neither do carriers. A tax year that runs July
+to June serves every calendar year with two bills; a quarterly collection
+estimates the first two instalments off last year's levy; a reassessment arrives
+as a supplemental beside the original. A premium can be priced coverage by
+coverage, financed over a down payment and instalments, or its fees collected a
+quarter at a time.
+
+Six checkboxes, three beside the tax backup and three beside the insurance, and
+**none of them moves a cent**. The property bears the same tax in the same year
+with every box ticked as with none; the Insurance line, the tenant's total and
+all seven ties are exactly what they were. What changes is the paper, the ledger
+memos behind it, and the arithmetic a reader has to follow to tie it out — which
+is the point, because an auditor who has only ever seen one shape of bill reads
+the second one as an error.
+
+[ADR 0006](docs/adr/0006-variants-change-the-evidence-never-the-figure.md) carries
+why the proration lives in the instalments rather than in the renderer, and why a
+supplemental is carved out of the assessment it corrected rather than added to
+it. A checkbox that moved money would be a scheme.
 
 ## Same seed, same bytes
 

@@ -75,7 +75,10 @@ scheme still ties, which is what makes it worth finding.
 **Scheme** — one thing the invented landlord did wrong, planted on purpose:
 capital expensed in a lump, billing above the cap, a management fee charged on a
 base the lease does not permit, a controllable expense relabelled as
-non-controllable, a tax refund kept. A package with no schemes is **clean**.
+non-controllable, a tax refund kept, taxes billed at a budget never trued up, a
+second fee for the service the first fee is for, another property's invoice
+allocated in. A package with no schemes is **clean**. A scheme moves money; a
+[Variant] only changes the paper the money is proved by.
 
 **Answer key** — the ground truth for a forged package: what was billed, what
 was correct, which scheme caused the difference, which tie it broke, and where
