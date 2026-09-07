@@ -14,8 +14,9 @@
  * landlord's own paperwork agrees with itself everywhere except the seam.
  */
 
-import type { ScenarioModel, TaxParcel } from "../model/types.ts";
-import { longDate, monthName, shortDate } from "../dates.ts";
+import type { ScenarioModel, TaxParcel, TaxParcelYear } from "../model/types.ts";
+import { billLabel, billsServing, creditsIn, installmentsIn } from "../model/tax.ts";
+import { iso, longDate, monthName, shortDate } from "../dates.ts";
 import { amortizationForYear } from "../scanner-rules.ts";
 import { buildLeaseDoc, sectionsOf, type LeaseArticle, type LeaseDoc } from "./lease/doc.ts";
 import { anchorFor } from "./lease/sections.ts";
@@ -133,37 +134,104 @@ export function renderBillingStatement(model: ScenarioModel, year: number): Arti
 }
 
 // ---------------------------------------------------------------------------
-// The tax backup: a bill per parcel, then the collector's account
+// The tax backup: the bills behind the year, then the collector's account
 // ---------------------------------------------------------------------------
 
-function taxBillPage(model: ScenarioModel, parcel: TaxParcel, year: number): string {
+/**
+ * One bill, printed the way the county that issued it prints one.
+ *
+ * Three things vary and each changes the page rather than the figure: a tax
+ * year that is not the calendar year gets its period on the letterhead and a
+ * note that its instalments fall either side of the new year; a quarterly
+ * collection gets a basis column and the true-up that follows the preliminary
+ * instalments; a supplemental gets its own page, its own assessment and the
+ * reason the assessor reopened the roll.
+ */
+function taxBillPage(model: ScenarioModel, parcel: TaxParcel, bill: TaxParcelYear): string {
   const u = model.universe;
-  const py = parcel.years.find((x) => x.year === year);
-  if (!py) return "";
-  const total = sum(py.installments.map((i) => i.amount_cents));
+  const total = sum(bill.installments.map((i) => i.amount_cents));
+  const label = billLabel(bill);
+  const supp = bill.supplemental;
+  const preliminary = bill.installments.filter((i) => i.basis === "preliminary");
+  const prelimTotal = sum(preliminary.map((i) => i.amount_cents));
+
+  const meta = supp
+    ? [`Supplemental to tax year ${bill.period ? bill.period.label : String(bill.year)}`, `Parcel ${parcel.parcel_id}`, `Bill issued ${longDate(supp.issued)}`]
+    : [
+        `Tax year ${label}`,
+        ...(bill.period ? [`Covering ${longDate(bill.period.start)} to ${longDate(bill.period.end)}`] : []),
+        `Parcel ${parcel.parcel_id}`,
+        `Bill issued ${longDate(bill.period ? iso(bill.year, 7, 12) : `${bill.year}-02-14`)}`,
+      ];
+
+  const facts = supp
+    ? [
+        { label: "Parcel number", value: parcel.parcel_id },
+        { label: "Increase in assessed value", value: usd(bill.assessed_value_cents) },
+        { label: "Tax rate per $100 of assessed value", value: `$${bill.rate_per_100.toFixed(4)}` },
+        { label: "Supplemental tax levied", value: usd(total) },
+      ]
+    : [
+        { label: "Parcel number", value: parcel.parcel_id },
+        { label: "Assessed value", value: usd(bill.assessed_value_cents) },
+        { label: "Tax rate per $100 of assessed value", value: `$${bill.rate_per_100.toFixed(4)}` },
+        { label: "Tax levied", value: usd(total) },
+      ];
+
+  const basisHeader = preliminary.length > 0 ? `<th>Basis</th>` : "";
+  const rowsOut = bill.installments
+    .map(
+      (i, n) =>
+        `<tr><td>${n + 1} of ${bill.installments.length}</td>` +
+        (preliminary.length > 0 ? `<td>${i.basis === "preliminary" ? "Preliminary" : "Actual"}</td>` : "") +
+        `<td>${esc(longDate(i.due))}</td><td class="num">${usd(i.amount_cents)}</td></tr>`,
+    )
+    .join("");
+  const trueUp =
+    preliminary.length > 0
+      ? `<tr><td colspan="${3}">Less preliminary instalments already billed</td><td class="num">-${usd(prelimTotal)}</td></tr>` +
+        `<tr class="total"><td colspan="${3}">Balance on the actual instalments</td><td class="num">${usd(total - prelimTotal)}</td></tr>`
+      : "";
+  const span = preliminary.length > 0 ? 3 : 2;
+
+  const notes: string[] = [];
+  notes.push(
+    supp
+      ? "Increase in assessed value × rate ÷ 100 = supplemental tax levied. This bill is in addition to the bill already issued for the tax year; the assessment it corrects has been reduced by the increase shown, so the parcel's tax for the year is unchanged by the correction alone."
+      : "Assessed value × rate ÷ 100 = tax levied.",
+  );
+  const straddles = new Set(bill.installments.map((i) => i.due.slice(0, 4))).size > 1;
+  if (bill.period && straddles) {
+    notes.push(
+      `This tax year runs ${longDate(bill.period.start)} to ${longDate(bill.period.end)}, so its instalments fall in two calendar years. The taxpayer account statement shows what was borne in each.`,
+    );
+  }
+  if (preliminary.length > 0 && bill.prior_levy_cents !== undefined) {
+    notes.push(
+      `The preliminary instalments are estimated from the ${usd(bill.prior_levy_cents)} levied for the preceding tax year, the assessment for this one not having been settled when they fell due. The actual instalments carry the assessment above, less what the preliminary instalments already took.`,
+    );
+  }
+  notes.push(
+    "Payment after the due date accrues interest at one percent (1%) per month. An appeal of the assessment does not stay the obligation to pay; a refund, if granted, is credited to the account shown on the collector's account statement.",
+  );
+  if (supp) notes.push(`Reason for the supplemental assessment: ${supp.reason}.`);
 
   return (
     `<div class="page">` +
-    letterhead(u.tax_collector, `${u.county}, State of ${u.address.state}`, [`Tax year ${year}`, `Parcel ${parcel.parcel_id}`, `Bill issued ${longDate(`${year}-02-14`)}`]) +
-    `<h1>Real property tax bill — ${year}</h1>` +
+    letterhead(u.tax_collector, `${u.county}, State of ${u.address.state}`, meta) +
+    `<h1>${supp ? "Supplemental real property tax bill" : "Real property tax bill"} — ${esc(supp ? (bill.period ? bill.period.label : String(bill.year)) : label)}</h1>` +
     `<div class="addr"><div class="name">${esc(u.landlord_entity)}</div>` +
     `<div>${esc(u.property_name)} — ${esc(parcel.description)}</div>` +
     `<div>${esc(u.address.line1)}, ${esc(u.address.city)}, ${esc(u.address.state_abbr)} ${esc(u.address.zip)}</div></div>` +
     `<h2>Assessment</h2><dl class="facts">` +
-    rows([
-      { label: "Parcel number", value: parcel.parcel_id },
-      { label: "Assessed value", value: usd(py.assessed_value_cents) },
-      { label: "Tax rate per $100 of assessed value", value: `$${py.rate_per_100.toFixed(4)}` },
-      { label: "Tax levied", value: usd(total) },
-    ]) +
+    rows(facts) +
     `</dl>` +
-    `<h2>Instalments</h2><table><thead><tr><th>Instalment</th><th>Due</th><th class="num">Amount</th></tr></thead><tbody>` +
-    py.installments
-      .map((i, n) => `<tr><td>${n + 1} of ${py.installments.length}</td><td>${esc(longDate(i.due))}</td><td class="num">${usd(i.amount_cents)}</td></tr>`)
-      .join("") +
-    `<tr class="total"><td colspan="2">Total ${year} tax</td><td class="num">${usd(total)}</td></tr>` +
+    `<h2>Instalments</h2><table><thead><tr><th>Instalment</th>${basisHeader}<th>Due</th><th class="num">Amount</th></tr></thead><tbody>` +
+    rowsOut +
+    trueUp +
+    `<tr class="total"><td colspan="${span}">Total ${esc(label)} tax</td><td class="num">${usd(total)}</td></tr>` +
     `</tbody></table>` +
-    `<p class="small">Assessed value × rate ÷ 100 = tax levied. Payment after the due date accrues interest at one percent (1%) per month. An appeal of the assessment does not stay the obligation to pay; a refund, if granted, is credited to the account shown on the collector's account statement.</p>` +
+    `<p class="small">${notes.map((n) => esc(n)).join(" ")}</p>` +
     notice() +
     `</div>`
   );
@@ -171,31 +239,53 @@ function taxBillPage(model: ScenarioModel, parcel: TaxParcel, year: number): str
 
 export function renderTaxBackup(model: ScenarioModel, year: number): Artifact {
   const u = model.universe;
-  const bills = model.tax_parcels.map((p) => taxBillPage(model, p, year)).join("");
+  const bills = model.tax_parcels.map((p) => billsServing(p, year).map((b) => taxBillPage(model, p, b)).join("")).join("");
 
   // The collector's account: every movement on the parcels in the year,
   // including a refund the county granted on an earlier assessment. It is the
   // only document that shows one, which is the whole point of it being here.
   const movements: Array<{ date: string; parcel: string; description: string; charge: number; credit: number }> = [];
+  const borne: Array<{ parcel: string; label: string; amount: number }> = [];
+  let multiple = false;
   for (const parcel of model.tax_parcels) {
-    const py = parcel.years.find((x) => x.year === year);
-    if (!py) continue;
-    py.installments.forEach((i, n) => {
-      movements.push({ date: i.due, parcel: parcel.parcel_id, description: `${year} tax, instalment ${n + 1} of ${py.installments.length} — paid`, charge: i.amount_cents, credit: 0 });
-    });
-    if (py.credit) {
+    const serving = billsServing(parcel, year);
+    if (serving.length > 1) multiple = true;
+    for (const bill of serving) {
+      const due = installmentsIn(bill, year);
+      borne.push({ parcel: parcel.parcel_id, label: billLabel(bill), amount: sum(due.map((i) => i.amount_cents)) });
+      for (const i of due) {
+        const n = bill.installments.indexOf(i) + 1;
+        movements.push({
+          date: i.due,
+          parcel: parcel.parcel_id,
+          description: `${billLabel(bill)} tax, instalment ${n} of ${bill.installments.length} — paid`,
+          charge: i.amount_cents,
+          credit: 0,
+        });
+      }
+    }
+    for (const c of creditsIn(parcel, year)) {
       movements.push({
-        date: py.credit.granted,
+        date: c.granted,
         parcel: parcel.parcel_id,
-        description: `Refund on appeal of ${py.credit.appeal_year} assessment — docket ${py.credit.docket}`,
+        description: `Refund on appeal of ${c.appeal_year} assessment — docket ${c.docket}`,
         charge: 0,
-        credit: py.credit.amount_cents,
+        credit: c.amount_cents,
       });
     }
   }
   movements.sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0));
   const charged = sum(movements.map((m) => m.charge));
   const credited = sum(movements.map((m) => m.credit));
+
+  // Where more than one bill served the year, the account says which part of
+  // each one landed in it. That arithmetic is the whole of tie T4 on a page.
+  const split = multiple
+    ? `<h2>What the property bore in ${year}</h2><table><thead><tr><th>Parcel</th><th>Bill</th><th class="num">Fell due in ${year}</th></tr></thead><tbody>` +
+      borne.map((b) => `<tr><td>${esc(b.parcel)}</td><td>${esc(b.label)} bill</td><td class="num">${usd(b.amount)}</td></tr>`).join("") +
+      `<tr class="total"><td colspan="2">Charged to the parcels in ${year}</td><td class="num">${usd(charged)}</td></tr>` +
+      `</tbody></table>`
+    : "";
 
   const account =
     `<div class="page">` +
@@ -213,6 +303,7 @@ export function renderTaxBackup(model: ScenarioModel, year: number): Artifact {
     `<tr class="total"><td colspan="3">Totals for ${year}</td><td class="num">${usd(charged)}</td><td class="num">${usd(credited)}</td></tr>` +
     `<tr class="total"><td colspan="3">Net tax borne by the property in ${year}</td><td class="num">${usd(charged - credited)}</td><td class="num"></td></tr>` +
     `</tbody></table>` +
+    split +
     notice() +
     `</div>`;
 

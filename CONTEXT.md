@@ -105,5 +105,10 @@ cites never move. A lease nobody added anything to has no Rider.
 package already does and never contradicts it; ticking one changes the lease
 and nothing else — no figure, no tie, no finding.
 
+**Variant** — a selectable form a backup document takes. A variant changes how
+a figure is evidenced and never the figure: with a July-to-June tax year ticked,
+two bills serve every calendar year instead of one and the property bears exactly
+the tax it bore before. A checkbox that moved money would be a Scheme.
+
 **Provenance** — for one document, what it was built from and which ties it has
 to hold. It is what the page shows instead of pretending the forge takes time.

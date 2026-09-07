@@ -22,6 +22,7 @@
 
 import type { AnswerFinding, ScenarioModel, SchemeId } from "./types.ts";
 import { feeBaseCents, leaseLadder, mulRate, sumCents } from "./recompute.ts";
+import { taxCreditsIn } from "./tax.ts";
 import { scannerFeeBaseCents } from "../scanner-rules.ts";
 
 export interface YearTruth {
@@ -105,9 +106,7 @@ export function correctFigures(model: ScenarioModel): Record<number, YearTruth> 
 
       // A tax refund the backup shows but the statement never netted.
       if (p.section === "Taxes") {
-        const credits = sumCents(
-          model.tax_parcels.map((parcel) => parcel.years.find((x) => x.year === y.year)?.credit?.amount_cents ?? 0),
-        );
+        const credits = taxCreditsIn(model.tax_parcels, y.year);
         amount -= credits;
       }
 

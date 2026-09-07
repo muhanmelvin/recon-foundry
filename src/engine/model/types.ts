@@ -17,6 +17,7 @@
 // the list of what may be asked for cannot drift apart. Type-only, so nothing
 // in the model depends on the renderer at run time.
 import type { ClauseId } from "../render/lease/rider.ts";
+import type { VariantId } from "./variants.ts";
 
 export type PropertyKind = "retail_strip" | "office" | "industrial_flex";
 export type SizeBand = "small" | "medium" | "large";
@@ -93,6 +94,20 @@ export interface ScenarioConfig {
    * no finding, and breaks no tie. See docs/adr/0005.
    */
   clauses?: ClauseId[];
+  /**
+   * The forms the backup documents take: a July-to-June tax year, quarterly
+   * collection, a supplemental bill.
+   *
+   * Same rule as `clauses` above, and the same reason: absent forges what it
+   * forged before variants existed, which `tests/variants.test.ts` holds against
+   * the pinned packages, and an empty list forges the same documents while the
+   * answer key records the configuration as passed.
+   *
+   * A variant changes how a figure is evidenced and never the figure. It moves
+   * no money, plants no finding and breaks no tie: the property bears the same
+   * tax in the same calendar year however its bills arrive. See docs/adr/0006.
+   */
+  variants?: VariantId[];
 }
 
 export interface Address {
@@ -224,6 +239,12 @@ export interface CapitalProject {
 export interface TaxInstallment {
   due: string; // ISO date
   amount_cents: number;
+  /**
+   * Set only where the county collects in quarters: the first instalments are
+   * estimated from the prior year's levy and the later ones carry the actual
+   * assessment, less what the estimates already took.
+   */
+  basis?: "preliminary" | "actual";
 }
 
 export interface TaxCredit {
@@ -234,6 +255,18 @@ export interface TaxCredit {
   docket: string;
 }
 
+/**
+ * One bill on one parcel — which is not the same thing as one year of it.
+ *
+ * `year` is the tax year the bill is for; `period`, when the county's year is
+ * not the calendar year, is what that tax year actually covers, and the
+ * instalments below then fall in two calendar years. What the property bears in
+ * a calendar year is always the instalments that came due in it — see
+ * `src/engine/model/tax.ts`, which is the only place that question is answered.
+ *
+ * The name is historical: with no variants a parcel has exactly one bill a year
+ * and the two words mean the same thing.
+ */
 export interface TaxParcelYear {
   year: number;
   assessed_value_cents: number;
@@ -241,6 +274,18 @@ export interface TaxParcelYear {
   installments: TaxInstallment[];
   /** A refund the county granted this year against a prior year's assessment. */
   credit?: TaxCredit;
+  /** What the tax year covers, when the county's year is not the calendar year. */
+  period?: { start: string; end: string; label: string };
+  /** The levy the preliminary instalments were estimated from, where there are any. */
+  prior_levy_cents?: number;
+  /**
+   * Set on a supplemental bill: a reassessment billed over and above the year's
+   * bill, whose `assessed_value_cents` is the *increase* in assessed value. The
+   * increase is carved out of the base bill rather than added to it, so the
+   * property bears the same tax — a supplemental that added tax would be a
+   * scheme, not a variant.
+   */
+  supplemental?: { reason: string; issued: string };
 }
 
 export interface TaxParcel {

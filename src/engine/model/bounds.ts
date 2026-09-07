@@ -21,6 +21,7 @@
 
 import { RESERVED_NAMES } from "../names.ts";
 import { CLAUSE_IDS } from "../render/lease/rider.ts";
+import { VARIANT_IDS } from "./variants.ts";
 import type { ScenarioConfig } from "./types.ts";
 
 /** Square feet of premises. Below this is a kiosk; above it is a campus. */
@@ -125,6 +126,26 @@ export function validateScenarioConfig(config: ScenarioConfig): string[] {
       const repeated = [...new Set(clauses.filter((c, i) => clauses.indexOf(c) !== i))];
       if (repeated.length > 0) {
         errors.push(`clauses: ${repeated.map((c) => `"${String(c)}"`).join(", ")} listed more than once — a clause is either in the Rider or it is not.`);
+      }
+    }
+  }
+
+  // The variants, under the same rule as the clauses above: the rails on the
+  // page can only offer the ones that exist, and a pasted config has never seen
+  // a rail. An unknown id would otherwise vanish into a package whose paper is
+  // not the paper the visitor asked for.
+  const variants = config.variants;
+  if (variants !== undefined) {
+    if (!Array.isArray(variants)) {
+      errors.push("variants: the backup forms are a list of ids — leave it out altogether for one bill a year and one invoice a policy.");
+    } else {
+      const unknown = [...new Set(variants.filter((v) => !VARIANT_IDS.includes(v)))];
+      if (unknown.length > 0) {
+        errors.push(`variants: no backup form is called ${unknown.map((v) => `"${String(v)}"`).join(", ")}. The forms are ${VARIANT_IDS.join(", ")}.`);
+      }
+      const repeated = [...new Set(variants.filter((v, i) => variants.indexOf(v) !== i))];
+      if (repeated.length > 0) {
+        errors.push(`variants: ${repeated.map((v) => `"${String(v)}"`).join(", ")} listed more than once — a form is either asked for or it is not.`);
       }
     }
   }

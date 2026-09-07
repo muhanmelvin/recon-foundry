@@ -25,6 +25,8 @@ import { amortizationForYear, isRoundPoolAmount } from "../scanner-rules.ts";
 import { drawNames, FRANKLIN, siteCodeFor } from "../names.ts";
 import { iso, monthName } from "../dates.ts";
 import { catalogFor, monthsFor, seasonWeight, type CategorySpec } from "./categories.ts";
+import { hasVariant } from "./variants.ts";
+import { billLabel, installmentsIn, taxBorneIn } from "./tax.ts";
 import { recomputeRecon, setEstimates } from "./recompute.ts";
 import type {
   CapitalProject,
@@ -248,6 +250,20 @@ export function amortizationYearTotal(p: CapitalProject, year: number): number {
 // Taxes and insurance
 // ---------------------------------------------------------------------------
 
+/**
+ * The bills on one parcel, in whatever shape the county issues them.
+ *
+ * Everything here is built around one figure and one promise: `targets[k]` is
+ * what this parcel costs the property in calendar year k, and every variant
+ * below has to reproduce it to the cent. The bills may straddle two calendar
+ * years, arrive in four instalments instead of two, or be joined by a
+ * supplemental after a reassessment — and the year's Taxes line does not move,
+ * because a Variant changes the evidence and never the figure.
+ *
+ * With no variant asked for the code takes the path it always took and draws
+ * the same numbers from the same named streams, which is what keeps a config
+ * that omits `variants` forging the bytes it always forged.
+ */
 function buildTaxParcels(config: ScenarioConfig, rng: Rng, basis: number, years: number[]): TaxParcel[] {
   const count = config.size_band === "small" ? 1 : config.size_band === "medium" ? 2 : rng.child("count").int(2, 3);
   const rate = Math.round(rng.child("rate").float(1.15, 2.65) * 10_000) / 10_000;
@@ -260,43 +276,218 @@ function buildTaxParcels(config: ScenarioConfig, rng: Rng, basis: number, years:
     totals.push(k === 0 ? firstTotal : Math.round(totals[k - 1]! * (1 + rng.child("growth/" + years[k]).float(0.018, 0.062))));
   }
 
+  const fiscal = hasVariant(config, "tax_fiscal_year");
+  const quarterly = hasVariant(config, "tax_quarterly");
+  // A reassessment corrects an assessment that was already settled, so never
+  // the first year of the package, and it lands on one parcel not all of them.
+  const suppK =
+    hasVariant(config, "tax_supplemental") && years.length > 1 ? rng.child("supplemental").int(1, years.length - 1) : -1;
+
   const parcels: TaxParcel[] = [];
   for (let i = 0; i < count; i++) {
     const pr = rng.child("parcel/" + i);
-    const parcelYears: TaxParcelYear[] = [];
+
+    // What this parcel costs the property, calendar year by calendar year. The
+    // bill's own arithmetic has to work, so the assessed value is back-solved
+    // from the target and the figure is then recomputed from it.
+    const assessed: number[] = [];
+    const targets: number[] = [];
     for (let k = 0; k < years.length; k++) {
-      const year = years[k]!;
       const target = Math.round((totals[k]! * shares[i]!) / shareSum);
-      // The bill's own arithmetic has to work: assessed value × rate ÷ 100 = tax.
-      const assessed = Math.round((target * 100) / rate / 100) * 100;
-      const tax = mulRate(assessed, rate / 100);
-      const first = Math.round(tax * pr.child("split/" + year).float(0.47, 0.53));
-      parcelYears.push({
+      const a = Math.round((target * 100) / rate / 100) * 100;
+      assessed.push(a);
+      targets.push(mulRate(a, rate / 100));
+    }
+
+    // The supplemental is carved out of the year it lands in, never added to it.
+    const carvedFrom = suppK >= 0 && i === 0 ? suppK : -1;
+    const increase = carvedFrom >= 0 ? carveIncrease(assessed[carvedFrom]!, rate, pr.child("supp-size").float(0.06, 0.12)) : 0;
+    const suppTax = carvedFrom >= 0 ? mulRate(increase, rate / 100) : 0;
+    const base = targets.map((t, k) => (k === carvedFrom ? t - suppTax : t));
+
+    const bills = fiscal
+      ? fiscalBills(pr, years, base, carvedFrom, increase, rate, quarterly)
+      : calendarBills(pr, years, base, assessed, carvedFrom, increase, rate, quarterly);
+
+    if (carvedFrom >= 0) {
+      const year = years[carvedFrom]!;
+      // The bill whose assessment the reassessment corrected — under a fiscal
+      // year, the one for the tax year that began in this calendar year.
+      const corrected = bills.find((b) => b.year === year);
+      bills.push({
         year,
-        assessed_value_cents: assessed,
+        assessed_value_cents: increase,
         rate_per_100: rate,
-        installments: [
-          { due: iso(year, 4, pr.child("due1/" + year).int(8, 16)), amount_cents: first },
-          { due: iso(year, 10, pr.child("due2/" + year).int(8, 16)), amount_cents: tax - first },
-        ],
+        installments: [{ due: iso(year, 9, pr.child("supp-due").int(8, 20)), amount_cents: suppTax }],
+        supplemental: {
+          reason: "Reassessment following completion of improvements",
+          issued: iso(year, 8, pr.child("supp-issued").int(3, 15)),
+        },
+        ...(corrected?.period ? { period: corrected.period } : {}),
       });
     }
+
     parcels.push({
       parcel_id: `${pr.child("book").int(100, 899)}-${pr.child("page").int(10, 89)}-${pr.child("lot").int(100, 899)}`,
       description: count === 1 ? "Entire property" : `Parcel ${i + 1} of ${count}`,
-      years: parcelYears,
+      years: bills,
     });
   }
   return parcels;
 }
 
-function taxTotalFor(parcels: readonly TaxParcel[], year: number): number {
-  let total = 0;
-  for (const p of parcels) {
-    const y = p.years.find((x) => x.year === year);
-    if (y) total += sum(y.installments.map((i) => i.amount_cents));
+/**
+ * An increase in assessed value whose tax can be carved out of the year without
+ * moving the year: `(A − I) × rate` plus `I × rate` has to come to `A × rate`
+ * exactly, and two roundings do not always agree with one. Stepping the
+ * increase a dollar at a time finds one that does, usually within a few tries.
+ */
+function carveIncrease(assessed: number, rate: number, fraction: number): number {
+  const whole = mulRate(assessed, rate / 100);
+  const want = Math.max(100, Math.round((assessed * fraction) / 100) * 100);
+  for (let step = 0; step < 400; step += 1) {
+    const inc = want + step * 100;
+    if (inc >= assessed) break;
+    if (mulRate(assessed - inc, rate / 100) + mulRate(inc, rate / 100) === whole) return inc;
   }
-  return total;
+  throw new Error(`carveIncrease: no supplemental assessment fits inside ${assessed} at ${rate}`);
+}
+
+/** An instalment day, drawn per bill so two parcels are not billed on one day. */
+const dayIn = (pr: Rng, key: string, year: number, month: number): string => iso(year, month, pr.child(key).int(8, 16));
+
+/**
+ * The county's year is the calendar year: one bill, and every instalment on it
+ * falls in the year it is for. This is the shape the forge has always issued.
+ */
+function calendarBills(
+  pr: Rng,
+  years: number[],
+  base: number[],
+  assessed: number[],
+  carvedFrom: number,
+  increase: number,
+  rate: number,
+  quarterly: boolean,
+): TaxParcelYear[] {
+  const bills: TaxParcelYear[] = [];
+  for (let k = 0; k < years.length; k++) {
+    const year = years[k]!;
+    const total = base[k]!;
+    const value = k === carvedFrom ? assessed[k]! - increase : assessed[k]!;
+
+    if (!quarterly) {
+      const first = Math.round(total * pr.child("split/" + year).float(0.47, 0.53));
+      bills.push({
+        year,
+        assessed_value_cents: value,
+        rate_per_100: rate,
+        installments: [
+          { due: dayIn(pr, "due1/" + year, year, 4), amount_cents: first },
+          { due: dayIn(pr, "due2/" + year, year, 10), amount_cents: total - first },
+        ],
+      });
+      continue;
+    }
+
+    // Quarterly: the first two instalments are estimated from last year's levy,
+    // because the assessment for this one is not settled when they fall due.
+    const prior = k === 0 ? Math.round(base[0]! / pr.child("prior-levy").float(1.02, 1.06)) : base[k - 1]!;
+    const estimate = Math.round(prior * 0.25);
+    const actual = allocate(total - estimate * 2, [1, 1]);
+    bills.push({
+      year,
+      assessed_value_cents: value,
+      rate_per_100: rate,
+      prior_levy_cents: prior,
+      installments: [
+        { due: dayIn(pr, "q1/" + year, year, 2), amount_cents: estimate, basis: "preliminary" },
+        { due: dayIn(pr, "q2/" + year, year, 5), amount_cents: estimate, basis: "preliminary" },
+        { due: dayIn(pr, "q3/" + year, year, 8), amount_cents: actual[0]!, basis: "actual" },
+        { due: dayIn(pr, "q4/" + year, year, 11), amount_cents: actual[1]!, basis: "actual" },
+      ],
+    });
+  }
+  return bills;
+}
+
+/**
+ * The county's year runs July to June, so every calendar year is served by the
+ * tail of one bill and the head of the next.
+ *
+ * The chain is what holds the figure still. Each bill is sized from the two
+ * calendar years it straddles, and its total is fixed by its own assessed value
+ * the way any bill's is. What is free is how the bill divides between its two
+ * halves, and that is set so the halves landing in a calendar year add to
+ * exactly what the property bears in it — which is also what absorbs the
+ * carve-out when a supplemental takes part of a bill away.
+ */
+function fiscalBills(
+  pr: Rng,
+  years: number[],
+  base: number[],
+  carvedFrom: number,
+  increase: number,
+  rate: number,
+  quarterly: boolean,
+): TaxParcelYear[] {
+  const n = years.length;
+  const growth = pr.child("fy-growth").float(1.02, 1.06);
+  // The bills at either end straddle out of the package, so the years just
+  // outside it have to have a size too.
+  const ext = [Math.round(base[0]! / growth), ...base, Math.round(base[n - 1]! * growth)];
+
+  const totals: number[] = [];
+  const values: number[] = [];
+  for (let j = 0; j <= n; j++) {
+    const want = Math.round((ext[j]! + ext[j + 1]!) / 2);
+    const value = Math.round((want * 100) / rate / 100) * 100;
+    values.push(value);
+    totals.push(mulRate(value, rate / 100));
+  }
+
+  // Bill j covers the tax year beginning in calendar year `years[0] - 1 + j`,
+  // so the bill the reassessment corrected is the one after the carved year.
+  if (carvedFrom >= 0) {
+    const j = carvedFrom + 1;
+    values[j] = values[j]! - increase;
+    totals[j] = mulRate(values[j]!, rate / 100);
+  }
+
+  // head[j] falls in the bill's own calendar year, tail[j] in the next one.
+  const head: number[] = [Math.round(totals[0]! * pr.child("fy-split").float(0.47, 0.53))];
+  const tail: number[] = [totals[0]! - head[0]!];
+  for (let k = 0; k < n; k++) {
+    head.push(base[k]! - tail[k]!);
+    tail.push(totals[k + 1]! - head[k + 1]!);
+  }
+
+  const bills: TaxParcelYear[] = [];
+  for (let j = 0; j <= n; j++) {
+    const startYear = years[0]! - 1 + j;
+    const label = `${startYear}–${String((startYear + 1) % 100).padStart(2, "0")}`;
+    const group = (amount: number, months: number[], calendar: number, basis?: "preliminary" | "actual") => {
+      const split = months.length === 1 ? [amount] : allocate(amount, [1, 1]);
+      return months.map((m, idx) => ({
+        due: dayIn(pr, `fy${j}/${m}`, calendar, m),
+        amount_cents: split[idx]!,
+        ...(basis ? { basis } : {}),
+      }));
+    };
+    bills.push({
+      year: startYear,
+      assessed_value_cents: values[j]!,
+      rate_per_100: rate,
+      period: { start: iso(startYear, 7, 1), end: iso(startYear + 1, 6, 30), label },
+      ...(quarterly ? { prior_levy_cents: j === 0 ? Math.round(totals[0]! / growth) : totals[j - 1]! } : {}),
+      installments: [
+        ...group(head[j]!, quarterly ? [8, 11] : [11], startYear, quarterly ? "preliminary" : undefined),
+        ...group(tail[j]!, quarterly ? [2, 5] : [2], startYear + 1, quarterly ? "actual" : undefined),
+      ],
+    });
+  }
+
+  return bills;
 }
 
 /**
@@ -529,7 +720,7 @@ function buildAtScale(config: ScenarioConfig, expenseScale: number): ScenarioMod
       trade: "contractor",
     });
 
-    const taxTotal = taxTotalFor(parcels, year);
+    const taxTotal = taxBorneIn(parcels, year);
     pools.push({ category: "Real estate taxes", section: "Taxes", bucket: "non_controllable", amount_cents: taxTotal, trade: "tax" });
 
     const ins = insurance.years[k]!;
@@ -660,22 +851,28 @@ function buildAtScale(config: ScenarioConfig, expenseScale: number): ScenarioMod
   return model;
 }
 
+/**
+ * The ledger books the instalments that came due in the year, whichever bill
+ * they came off. Under a fiscal tax year that is two bills; where the county
+ * issued a supplemental it is three.
+ */
 function taxGl(parcels: readonly TaxParcel[], universe: Universe, year: number): GLEntry[] {
   const out: GLEntry[] = [];
   for (const p of parcels) {
-    const y = p.years.find((x) => x.year === year);
-    if (!y) continue;
-    y.installments.forEach((inst, i) => {
-      out.push({
-        year,
-        date: inst.due,
-        account: universe.gl_accounts["Real estate taxes"]!,
-        category: "Real estate taxes",
-        vendor: universe.tax_collector,
-        memo: `Parcel ${p.parcel_id} — ${year} installment ${i + 1} of ${y.installments.length}`,
-        amount_cents: inst.amount_cents,
-      });
-    });
+    for (const bill of p.years) {
+      for (const inst of installmentsIn(bill, year)) {
+        const n = bill.installments.indexOf(inst) + 1;
+        out.push({
+          year,
+          date: inst.due,
+          account: universe.gl_accounts["Real estate taxes"]!,
+          category: "Real estate taxes",
+          vendor: universe.tax_collector,
+          memo: `Parcel ${p.parcel_id} — ${billLabel(bill)} installment ${n} of ${bill.installments.length}`,
+          amount_cents: inst.amount_cents,
+        });
+      }
+    }
   }
   return out;
 }

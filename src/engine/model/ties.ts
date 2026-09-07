@@ -22,6 +22,7 @@ import type { ScenarioModel, TieId } from "./types.ts";
 import { amortizationForYear, looksCapital } from "../scanner-rules.ts";
 import { monthIndex, parseIso } from "../dates.ts";
 import { feeBaseCents, leaseLadder } from "./recompute.ts";
+import { billLabel, creditsIn, installmentsIn, taxBorneIn } from "./tax.ts";
 
 export interface TieBreak {
   tie: TieId;
@@ -104,19 +105,26 @@ export function checkTies(model: ScenarioModel): TieBreak[] {
     push("T2", y.year, r.tenant_total_cents - r.estimates_paid_cents - r.balance_due_cents, "the balance due is not the tenant total less the estimates paid");
 
     // --- T4: the tax backup adds to the tax line ---------------------------
+    // A bill is not a year: under a fiscal tax year one bill's instalments
+    // fall in two calendar years, and a supplemental is a second bill inside
+    // one. So the test is on every bill that put an instalment into this year —
+    // its own arithmetic, and then the instalments themselves against the line.
     const retLine = y.pools.find((p) => p.section === "Taxes");
     if (retLine) {
       let billedByCounty = 0;
       let credits = 0;
       for (const parcel of model.tax_parcels) {
-        const py = parcel.years.find((x) => x.year === y.year);
-        if (!py) continue;
-        billedByCounty += sum(py.installments.map((i) => i.amount_cents));
-        if (py.credit) credits += py.credit.amount_cents;
-        const recomputed = mulRate(py.assessed_value_cents, py.rate_per_100 / 100);
-        const levied = sum(py.installments.map((i) => i.amount_cents));
-        push("T4", y.year, levied - recomputed, `parcel ${parcel.parcel_id}: assessed value at the county's rate is ${cents(recomputed)}, the bill totals ${cents(levied)}`, retLine.category);
+        for (const bill of parcel.years) {
+          const due = installmentsIn(bill, y.year);
+          if (due.length === 0) continue;
+          billedByCounty += sum(due.map((i) => i.amount_cents));
+          const recomputed = mulRate(bill.assessed_value_cents, bill.rate_per_100 / 100);
+          const levied = sum(bill.installments.map((i) => i.amount_cents));
+          push("T4", y.year, levied - recomputed, `parcel ${parcel.parcel_id}, ${billLabel(bill)} bill: assessed value at the county's rate is ${cents(recomputed)}, the bill totals ${cents(levied)}`, retLine.category);
+        }
+        credits += sum(creditsIn(parcel, y.year).map((c) => c.amount_cents));
       }
+      push("T4", y.year, billedByCounty - taxBorneIn(model.tax_parcels, y.year), "the instalments due this year do not add to what the property bore", retLine.category);
       push("T4", y.year, billedByCounty - credits - retLine.amount_cents, `the tax backup nets to ${cents(billedByCounty - credits)} and the reconciliation bills ${cents(retLine.amount_cents)}`, retLine.category);
     }
 

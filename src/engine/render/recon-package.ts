@@ -33,6 +33,7 @@
  * boundary where the engine's integer cents turn back into money.
  */
 
+import { creditsIn, parcelBilledIn } from "../model/tax.ts";
 import type { ScenarioModel } from "../model/types.ts";
 import { scenarioId } from "../model/answer-key.ts";
 import { cappedPoolLabel } from "../model/categories.ts";
@@ -127,23 +128,26 @@ export function toReconPackage(model: ScenarioModel): unknown {
 
 /** The collector's account for one year, in the scanner's schema-1.1 shape. */
 function taxBackupFor(model: ScenarioModel, year: number): { tax_backup?: unknown } {
+  // One entry per parcel, whatever shape its bills arrived in: what the
+  // county charged it this calendar year, and what it credited back. A fiscal
+  // year or a supplemental changes the paper behind these two figures and not
+  // the figures, which is why the scanner's own fixtures never move.
   const parcels = model.tax_parcels.flatMap((parcel) => {
-    const py = parcel.years.find((x) => x.year === year);
-    if (!py) return [];
+    const billed = parcelBilledIn(parcel, year);
+    if (billed === 0) return [];
+    const credits = creditsIn(parcel, year);
     return [
       {
         parcel_id: parcel.parcel_id,
-        billed: d(py.installments.reduce((s, i) => s + i.amount_cents, 0)),
-        ...(py.credit
+        billed: d(billed),
+        ...(credits.length > 0
           ? {
-              credits: [
-                {
-                  amount: d(py.credit.amount_cents),
-                  appeal_year: py.credit.appeal_year,
-                  granted: py.credit.granted,
-                  reference: py.credit.docket,
-                },
-              ],
+              credits: credits.map((c) => ({
+                amount: d(c.amount_cents),
+                appeal_year: c.appeal_year,
+                granted: c.granted,
+                reference: c.docket,
+              })),
             }
           : {}),
       },

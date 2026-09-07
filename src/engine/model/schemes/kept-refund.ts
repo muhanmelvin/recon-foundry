@@ -43,7 +43,7 @@ export function plantKeptTaxRefund(model: ScenarioModel, rng: Rng): SchemeResult
   // The last year the package covers, so there is a settled prior assessment for
   // the appeal to have been about.
   const year = model.years[model.years.length - 1]!.year;
-  const py = parcel.years.find((x) => x.year === year)!;
+  const py = parcel.years.find((x) => x.year === year && !x.supplemental)!;
   const levy = py.installments.reduce((s, i) => s + i.amount_cents, 0);
 
   // Small enough relative to the levy that no year-over-year test picks it up.

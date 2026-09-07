@@ -44,6 +44,7 @@ import { renderAnswerSheet } from "../engine/render/answer-sheet.ts";
 import { renderReconPackageJson } from "../engine/render/recon-package.ts";
 import { CLAUSE_IDS, RIDER_SECTIONS, type ClauseId } from "../engine/render/lease/rider.ts";
 import { litLease } from "../engine/render/lease/highlight.ts";
+import { variantsFor, type VariantId } from "../engine/model/variants.ts";
 import { buildPackageZip, packageContents } from "../engine/package/packager.ts";
 import { toScannerManifest } from "../engine/model/answer-key.ts";
 import type { Artifact } from "../engine/render/artifact.ts";
@@ -990,6 +991,61 @@ function latestClauseRef(): string | null {
 }
 
 /**
+ * The forms the county's bills take, beside the bills.
+ *
+ * Same shape as the clause rail below it and the same discipline: the key is
+ * deleted rather than emptied, so a package nobody asked a variant of is the
+ * package that was always forged. What it promises is stronger than the Rider's,
+ * though — a clause changes the lease and leaves the money alone, and a variant
+ * leaves the money alone while changing the document the money is proved by.
+ */
+function setVariants(ids: VariantId[]): void {
+  const inOrder = variantsFor("tax").map((v) => v.id).filter((id) => ids.includes(id));
+  if (inOrder.length === 0) delete state.config.variants;
+  else state.config.variants = inOrder;
+  reforge();
+}
+
+function variantRail(): HTMLElement {
+  const selected = state.config.variants ?? [];
+  const specs = variantsFor("tax");
+
+  return h(
+    "div",
+    { class: "panel rail" },
+    h("h3", {}, "How the tax bills arrive"),
+    h(
+      "p",
+      { class: "field-hint" },
+      "No two counties bill alike, and an auditor who has only seen one shape reads the second as an error. Tick these and the paper changes — the bills, the ledger memos, the collector's account. The figure does not: the property bears the same tax in the same year with every box ticked as with none.",
+    ),
+    h(
+      "fieldset",
+      {},
+      h("legend", {}, "The county's practice"),
+      ...specs.map((spec) => {
+        const on = selected.includes(spec.id);
+        const box = h("input", {
+          type: "checkbox",
+          onchange: (e: Event) => {
+            const checked = (e.target as HTMLInputElement).checked;
+            setVariants(checked ? [...selected, spec.id] : selected.filter((id) => id !== spec.id));
+          },
+        }) as HTMLInputElement;
+        box.checked = on;
+        return h("label", { class: "scheme" }, box, h("span", {}, h("strong", {}, spec.title), h("span", { class: "field-hint" }, spec.hint)));
+      }),
+    ),
+    h(
+      "div",
+      { class: "row pad" },
+      h("button", { type: "button", class: "ghost", onclick: () => setVariants(specs.map((v) => v.id)) }, "All three"),
+      h("button", { type: "button", class: "ghost", onclick: () => setVariants([]) }, "None"),
+    ),
+  );
+}
+
+/**
  * The clause tree beside the lease. Ticking one adds it to the Rider, the forge
  * runs again, and the document to the right redraws with the clause in it — the
  * nearest thing in an app this fast to watching a lease be written.
@@ -1245,13 +1301,15 @@ function stepPanel(): HTMLElement {
   if (state.step === "take") {
     return h("div", { class: "step-body" }, downloadsPanel());
   }
-  // The rail is the lease's own control, so it appears only beside the lease.
-  // Every other document takes the full width it was starved of before.
+  // A rail belongs to its own document: the clauses beside the lease, the
+  // county's billing practice beside the tax backup. Every other document takes
+  // the full width it was starved of before.
+  const rail = state.tab === "lease" ? leaseRail() : state.tab === "tax" ? variantRail() : null;
   return h(
     "div",
     { class: "step-body" },
     tiesStrip(),
-    state.tab === "lease" ? h("div", { class: "read-layout" }, leaseRail(), previewPanel()) : previewPanel(),
+    rail === null ? previewPanel() : h("div", { class: "read-layout" }, rail, previewPanel()),
   );
 }
 
