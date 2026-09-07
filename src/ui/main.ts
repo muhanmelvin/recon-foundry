@@ -43,6 +43,7 @@ import { renderBillingStatement, renderInsuranceBackup, renderLease, renderProje
 import { renderAnswerSheet } from "../engine/render/answer-sheet.ts";
 import { renderReconPackageJson } from "../engine/render/recon-package.ts";
 import { CLAUSE_IDS, RIDER_SECTIONS, type ClauseId } from "../engine/render/lease/rider.ts";
+import { litLease } from "../engine/render/lease/highlight.ts";
 import { buildPackageZip, packageContents } from "../engine/package/packager.ts";
 import { toScannerManifest } from "../engine/model/answer-key.ts";
 import type { Artifact } from "../engine/render/artifact.ts";
@@ -87,6 +88,12 @@ interface State {
   /** The one tie whose detail is open, if any. */
   openTie: TieId | null;
   trainingMode: boolean;
+  /**
+   * The clause added last, marked in the lease preview so a visitor can see
+   * where it landed. UI state and not configuration: it changes what the page
+   * draws over the document, never what the forge produced.
+   */
+  latestClause: ClauseId | null;
   describe: DescribeState;
   /**
    * Why the last edit did not forge. The bounds live in the engine, so a value
@@ -151,6 +158,7 @@ const state: State = (() => {
     year: scenario.model.years[scenario.model.years.length - 1]!.year,
     openTie: null,
     trainingMode: true,
+    latestClause: null,
     describe: { description: "", paste: "", result: null, applied: null },
     configError: null,
   };
@@ -787,7 +795,13 @@ function tabDefs(): TabDef[] {
       perYear: false,
       provenance: "Built from the lease terms: the premises, the share, the cap, the fee base, the capital threshold and its life.",
       ties: ["T7"],
-      build: () => frame(renderLease(model)),
+      // The mark goes on the way to the frame, never into the artifact: the
+      // file this tab downloads and the copy in the ZIP are the lease as
+      // forged. The two calls were already independent.
+      build: () => {
+        const lease = renderLease(model);
+        return docFrame(litLease(lease.bytes as string, latestClauseRef()), lease.title);
+      },
       artifact: () => renderLease(model),
     },
     {
@@ -958,10 +972,21 @@ function previewPanel(): HTMLElement {
  * as an optional field that was never mentioned, and only the second one leaves
  * the package exactly as it was.
  */
-function setClauses(ids: ClauseId[]): void {
+function setClauses(ids: ClauseId[], latest: ClauseId | null): void {
   if (ids.length === 0) delete state.config.clauses;
   else state.config.clauses = CLAUSE_IDS.filter((id) => ids.includes(id));
+  // One rule covers unticking the marked clause, "None", and "All twelve":
+  // a mark survives only while the clause it points at is in the lease, and
+  // twelve added at once leaves no single one of them latest.
+  state.latestClause = latest !== null && ids.includes(latest) ? latest : null;
   reforge();
+}
+
+/** The Rider reference of the clause added last, for the preview's mark. */
+function latestClauseRef(): string | null {
+  const id = state.latestClause;
+  if (id === null) return null;
+  return RIDER_SECTIONS.flatMap((s) => s.clauses).find((c) => c.id === id)?.ref ?? null;
 }
 
 /**
@@ -979,7 +1004,7 @@ function leaseRail(): HTMLElement {
     h(
       "p",
       { class: "field-hint" },
-      "Clauses ride after Article VII, so nothing a finding cites ever moves. The Rider changes the lease and nothing else: every figure in the package is exactly what it was.",
+      "Clauses ride after Article VII, so nothing a finding cites ever moves. The Rider changes the lease and nothing else: every figure in the package is exactly what it was. The clause you added last is marked in the document, and on its line in the contents at the top.",
     ),
     ...RIDER_SECTIONS.map((section) =>
       h(
@@ -992,7 +1017,7 @@ function leaseRail(): HTMLElement {
             type: "checkbox",
             onchange: (e: Event) => {
               const checked = (e.target as HTMLInputElement).checked;
-              setClauses(checked ? [...selected, clause.id] : selected.filter((id) => id !== clause.id));
+              setClauses(checked ? [...selected, clause.id] : selected.filter((id) => id !== clause.id), checked ? clause.id : state.latestClause);
             },
           }) as HTMLInputElement;
           box.checked = on;
@@ -1000,7 +1025,12 @@ function leaseRail(): HTMLElement {
             "label",
             { class: "scheme" },
             box,
-            h("span", {}, h("strong", {}, clause.title), on ? h("span", { class: "field-hint" }, `§${clause.ref} in the lease`) : null),
+            h(
+              "span",
+              {},
+              h("strong", {}, clause.title),
+              on ? h("span", { class: "field-hint" }, `§${clause.ref} in the lease${clause.id === state.latestClause ? ", marked in it" : ""}`) : null,
+            ),
           );
         }),
       ),
@@ -1008,8 +1038,8 @@ function leaseRail(): HTMLElement {
     h(
       "div",
       { class: "row pad" },
-      h("button", { type: "button", class: "ghost", onclick: () => setClauses([...CLAUSE_IDS]) }, "All twelve"),
-      h("button", { type: "button", class: "ghost", onclick: () => setClauses([]) }, "None"),
+      h("button", { type: "button", class: "ghost", onclick: () => setClauses([...CLAUSE_IDS], null) }, "All twelve"),
+      h("button", { type: "button", class: "ghost", onclick: () => setClauses([], null) }, "None"),
     ),
   );
 }
