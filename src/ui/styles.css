@@ -76,6 +76,11 @@
   .read-layout {
     grid-template-columns: minmax(0, 1fr);
   }
+  /* On a phone the document comes first; twelve checkboxes above it would push
+     the thing you came to read a screen and a half down. */
+  .read-layout .rail {
+    order: 1;
+  }
 }
 
 .panel h3 {

@@ -37,9 +37,10 @@ after Article VII.**
 - Twelve clauses in six sections, catalogued in
   `src/engine/render/lease/rider.ts`. `ScenarioConfig.clauses` names the ones
   selected; the Rider prints in catalog order whatever order they were ticked in.
-- **Absent or empty is byte-identical to before.** No Rider, no mention of one
-  in §7.02, no line in the package's about note. `tests/rider.test.ts` holds the
-  three pinned regression ZIPs against exactly that.
+- **Absent is byte-identical to before; empty is document-identical.** No
+  Rider, no mention of one in §7.02, no line in the package's about note.
+  `tests/rider.test.ts` holds the three pinned regression ZIPs against the
+  absent case, and the lease's bytes against the empty one (see Consequences).
 - **A clause restates the model and never contradicts it.** It changes the lease
   document and nothing else: no pool, no tie, no scheme, no finding.
 - **Nothing tenant-specific.** The wording keys on the kind of property — retail

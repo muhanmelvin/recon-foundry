@@ -81,11 +81,13 @@ export interface ScenarioConfig {
   /**
    * The optional clauses the lease carries, as a Rider after Article VII.
    *
-   * Absent or empty means a lease of seven articles and no Rider — and, like
-   * `premises_sf` above, that must forge byte-for-byte what it forged before
-   * the Rider existed, which `tests/rider.test.ts` holds against the same
-   * fixtures. Order here is ignored: the Rider prints in catalog order, so two
-   * visitors who ticked the same clauses in different orders get the same file.
+   * Absent or empty means a lease of seven articles and no Rider. Absent must
+   * forge byte-for-byte what it forged before the Rider existed, like
+   * `premises_sf` above, and `tests/rider.test.ts` holds it against the same
+   * fixtures; an empty list forges the same documents but is recorded as such
+   * in the answer key, so the ZIP differs by a few bytes. Order here is
+   * ignored: the Rider prints in catalog order, so two visitors who ticked the
+   * same clauses in different orders get the same file.
    *
    * A clause changes the prose lease and nothing else. It moves no money, plants
    * no finding, and breaks no tie. See docs/adr/0005.

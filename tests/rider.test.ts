@@ -5,8 +5,8 @@
  *
  * *A lease with no Rider is the lease that was always forged.* The clauses are
  * opt-in, and opt-in here is a claim about bytes: the three configs pinned in
- * `tests/fixtures/regression.json` must still produce those exact ZIPs, whether
- * they omit `clauses` or set it to an empty list.
+ * `tests/fixtures/regression.json` must still produce those exact ZIPs when they
+ * omit `clauses`, and the same documents when they set it to an empty list.
  *
  * *A clause restates the package; it never contradicts it.* This is the trap
  * the whole feature is built around. A clause that promised something the forge
@@ -176,6 +176,19 @@ describe("a clause restates the package and never contradicts it", () => {
     const t = text("repairs_landlord");
     expect(t).toContain("Section 6.04");
     expect(t).not.toContain("sole cost");
+    // The unamortized-capital answer key says the first instalment belongs in
+    // the year the work was done. A clause forbidding any charge in that year
+    // would argue with the key about its own package.
+    expect(t).not.toContain("in the year the work was done");
+  });
+
+  it("does not demand an admitted carrier while recovering surplus lines tax", () => {
+    // The carrier's invoice in the package carries a surplus lines tax, which
+    // is what a non-admitted placement pays. A clause requiring a carrier
+    // authorized in the State would make that invoice a breach.
+    const t = text("insurance_landlord");
+    expect(t).toContain("surplus lines");
+    expect(t).not.toContain("authorized to write");
   });
 
   it("keeps the classes §6.01 fixed", () => {

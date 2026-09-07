@@ -109,7 +109,7 @@ const CATALOG: ReadonlyArray<{ title: string; clauses: Array<Omit<RiderClause, "
         title: "Landlord's obligations",
         paragraphs: (m) => [
           `Landlord shall maintain and repair the roof, the foundation, the structural elements and the exterior walls of the buildings on the Property, and shall operate and maintain ${phrases(m).common_areas}, in the condition of comparable properties in the area. The cost of that maintenance and repair is an Operating Expense to the extent Article VI permits it.`,
-          "Where an item of that work is properly classified as a capital expenditure, its cost is recoverable only as Section 6.04 permits — capitalized and amortized over the period that Section states, with only the installment attributable to the Lease Year included — and no part of it may be charged to Tenant in the year the work was done.",
+          "Where an item of that work is properly classified as a capital expenditure, its cost is recoverable only as Section 6.04 permits — capitalized and amortized over the period that Section states, with only the installment attributable to the Lease Year included.",
         ],
       },
       {
@@ -172,7 +172,7 @@ const CATALOG: ReadonlyArray<{ title: string; clauses: Array<Omit<RiderClause, "
         title: "Real property taxes",
         paragraphs: () => [
           "Landlord shall pay Taxes to the collecting authority when they fall due, and shall take any installment plan, discount or early-payment allowance available to it. Tenant bears its Proportionate Share of Taxes through Article VI, and Taxes are Operating Expenses of the Non-Controllable class under Section 6.01.",
-          "Any refund, abatement or credit Landlord receives in respect of the Property reduces Taxes for the Lease Year in which Landlord receives it, whichever Lease Year the assessment it relates to, as Section 6.06 requires. Landlord shall furnish the assessment notices, the tax bills and the collector's account for each Lease Year on request.",
+          "Any refund, abatement or credit Landlord receives in respect of the Property reduces Taxes for the Lease Year in which Landlord receives it, whatever Lease Year's assessment it relates to, as Section 6.06 requires. Landlord shall furnish the assessment notices, the tax bills and the collector's account for each Lease Year on request.",
         ],
       },
       {
@@ -192,7 +192,7 @@ const CATALOG: ReadonlyArray<{ title: string; clauses: Array<Omit<RiderClause, "
         id: "insurance_landlord",
         title: "Landlord's insurance",
         paragraphs: () => [
-          "Landlord shall carry property insurance on the buildings and improvements at the Property on a replacement-cost basis, and commercial general liability insurance, with a carrier authorized to write insurance in the State. The premium Landlord actually pays a carrier, together with the policy fees and surplus lines taxes shown on the carrier's invoice, is an Operating Expense of the Non-Controllable class under Section 6.01.",
+          "Landlord shall carry property insurance on the buildings and improvements at the Property on a replacement-cost basis, and commercial general liability insurance. The premium Landlord actually pays a carrier, together with the policy fees and surplus lines taxes shown on the carrier's invoice, is an Operating Expense of the Non-Controllable class under Section 6.01.",
           "A deductible Landlord bears upon a covered loss is recoverable as an Operating Expense only to the extent it does not exceed one year's premium for the coverage the loss was made under. An amount Landlord retains under a self-insured programme, a captive insurer or a retention is not a premium and is not an Operating Expense, and neither is a premium for the coverage of a risk arising away from the Property.",
         ],
       },
