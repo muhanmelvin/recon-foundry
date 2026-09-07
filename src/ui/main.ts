@@ -42,6 +42,7 @@ import { renderAmortizationWorkbook, renderReconWorkbook, renderTenantLedger } f
 import { renderBillingStatement, renderInsuranceBackup, renderLease, renderProjectBackup, renderTaxBackup } from "../engine/render/documents.ts";
 import { renderAnswerSheet } from "../engine/render/answer-sheet.ts";
 import { renderReconPackageJson } from "../engine/render/recon-package.ts";
+import { CLAUSE_IDS, RIDER_SECTIONS, type ClauseId } from "../engine/render/lease/rider.ts";
 import { buildPackageZip, packageContents } from "../engine/package/packager.ts";
 import { toScannerManifest } from "../engine/model/answer-key.ts";
 import type { Artifact } from "../engine/render/artifact.ts";
@@ -963,6 +964,74 @@ function previewPanel(): HTMLElement {
 }
 
 // ---------------------------------------------------------------------------
+// The lease rail
+// ---------------------------------------------------------------------------
+
+/**
+ * Write the selection back to the config and forge again.
+ *
+ * The key is deleted rather than set to an empty list, the same discipline
+ * `premises_sf` follows: an optional field set to nothing is not the same object
+ * as an optional field that was never mentioned, and only the second one leaves
+ * the package exactly as it was.
+ */
+function setClauses(ids: ClauseId[]): void {
+  if (ids.length === 0) delete state.config.clauses;
+  else state.config.clauses = CLAUSE_IDS.filter((id) => ids.includes(id));
+  reforge();
+}
+
+/**
+ * The clause tree beside the lease. Ticking one adds it to the Rider, the forge
+ * runs again, and the document to the right redraws with the clause in it — the
+ * nearest thing in an app this fast to watching a lease be written.
+ */
+function leaseRail(): HTMLElement {
+  const selected = state.config.clauses ?? [];
+
+  return h(
+    "div",
+    { class: "panel rail" },
+    h("h3", {}, "Build the Rider"),
+    h(
+      "p",
+      { class: "field-hint" },
+      "Clauses ride after Article VII, so nothing a finding cites ever moves. The Rider changes the lease and nothing else: every figure in the package is exactly what it was.",
+    ),
+    ...RIDER_SECTIONS.map((section) =>
+      h(
+        "fieldset",
+        {},
+        h("legend", {}, section.title),
+        ...section.clauses.map((clause) => {
+          const on = selected.includes(clause.id);
+          const box = h("input", {
+            type: "checkbox",
+            onchange: (e: Event) => {
+              const checked = (e.target as HTMLInputElement).checked;
+              setClauses(checked ? [...selected, clause.id] : selected.filter((id) => id !== clause.id));
+            },
+          }) as HTMLInputElement;
+          box.checked = on;
+          return h(
+            "label",
+            { class: "scheme" },
+            box,
+            h("span", {}, h("strong", {}, clause.title), on ? h("span", { class: "field-hint" }, `§${clause.ref} in the lease`) : null),
+          );
+        }),
+      ),
+    ),
+    h(
+      "div",
+      { class: "row pad" },
+      h("button", { type: "button", class: "ghost", onclick: () => setClauses([...CLAUSE_IDS]) }, "All twelve"),
+      h("button", { type: "button", class: "ghost", onclick: () => setClauses([]) }, "None"),
+    ),
+  );
+}
+
+// ---------------------------------------------------------------------------
 // Downloads and the answer key
 // ---------------------------------------------------------------------------
 
@@ -1163,7 +1232,14 @@ function stepPanel(): HTMLElement {
   if (state.step === "take") {
     return h("div", { class: "step-body" }, downloadsPanel());
   }
-  return h("div", { class: "step-body" }, tiesStrip(), previewPanel());
+  // The rail is the lease's own control, so it appears only beside the lease.
+  // Every other document takes the full width it was starved of before.
+  return h(
+    "div",
+    { class: "step-body" },
+    tiesStrip(),
+    state.tab === "lease" ? h("div", { class: "read-layout" }, leaseRail(), previewPanel()) : previewPanel(),
+  );
 }
 
 function renderAll(): void {
