@@ -23,7 +23,7 @@ import {
   renderTaxBackup,
 } from "../src/engine/render/documents.ts";
 import { buildLeaseDoc, sectionsOf } from "../src/engine/render/lease/doc.ts";
-import { ARTICLES } from "../src/engine/render/lease/sections.ts";
+import { anchorFor, ARTICLES } from "../src/engine/render/lease/sections.ts";
 import { SYNTHETIC_NOTICE } from "../src/engine/render/artifact.ts";
 import { esc, usd } from "../src/engine/render/html.ts";
 import type { Artifact } from "../src/engine/render/artifact.ts";
@@ -151,6 +151,18 @@ describe("the lease", () => {
     const doc = buildLeaseDoc(MODEL);
     expect(doc.articles.map((a) => a.numeral)).toEqual(ARTICLES.map((a) => a.numeral));
     expect(sectionsOf(doc).map((s) => s.ref)).toEqual(ARTICLES.flatMap((a) => a.sections.map((s) => s.ref)));
+  });
+
+  it.each(MODELS)("%s lists every clause in its contents, and every link lands", (_seed, model) => {
+    const html = renderLease(model).bytes as string;
+    const listed = [...html.matchAll(/<a href="#(sec-[^"]+)">/g)].map((m) => m[1]!);
+    expect(listed).toEqual(ARTICLES.flatMap((a) => a.sections.map((s) => anchorFor(s.ref))));
+    for (const [ref, title] of ARTICLES.flatMap((a) => a.sections.map((s) => [s.ref, s.title] as const))) {
+      // The link's target exists exactly once, so a fragment link inside the
+      // sandboxed preview goes somewhere unambiguous.
+      expect(html.split(`id="${anchorFor(ref)}"`).length - 1, `anchor for §${ref}`).toBe(1);
+      expect(html, `§${ref} in the contents`).toContain(`<span>${esc(title)}</span>`);
+    }
   });
 
   it.each(MODELS)("%s writes every clause the model has terms for", (_seed, model) => {

@@ -67,6 +67,13 @@ tr.sub td { font-weight: 700; background: #f6f4f0; }
 .lease .silent { color: #4a4f55; font-style: italic; }
 .lease .cover { text-align: center; margin: 1.6in 0 0; }
 .lease .cover h1 { font-size: 16pt; margin-bottom: 20px; }
+.lease .toc { margin: 0.55in 0 0; }
+.lease .toc h2 { margin: 0 0 10px; }
+.lease .toc ul { list-style: none; margin: 0; padding: 0; font-size: 10pt; }
+.lease .toc .art { font-weight: 700; margin: 10px 0 3px; }
+.lease .toc .art ul { font-weight: 400; margin: 0; }
+.lease .toc a { display: flex; gap: 10px; color: inherit; text-decoration: none; padding: 2px 0; border-bottom: 1px dotted #ccc7bd; }
+.lease .toc a .ref { flex: none; width: 4.2em; color: #4a4f55; }
 @media print {
   html { background: #fff; }
   body { padding: 0; font-size: 10.5pt; }

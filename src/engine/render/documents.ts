@@ -17,7 +17,8 @@
 import type { ScenarioModel, TaxParcel } from "../model/types.ts";
 import { longDate, monthName, shortDate } from "../dates.ts";
 import { amortizationForYear } from "../scanner-rules.ts";
-import { buildLeaseDoc, sectionsOf } from "./lease/doc.ts";
+import { buildLeaseDoc, sectionsOf, type LeaseDoc } from "./lease/doc.ts";
+import { anchorFor } from "./lease/sections.ts";
 import { esc, htmlDocument, pct, rows, usd } from "./html.ts";
 import { documentName, termDocumentName } from "../package/filenames.ts";
 import { SYNTHETIC_NOTICE, type Artifact } from "./artifact.ts";
@@ -335,6 +336,28 @@ export function renderProjectBackup(model: ScenarioModel, year: number): Artifac
 // The lease
 // ---------------------------------------------------------------------------
 
+/**
+ * The contents page — every article and section, each a link to the clause.
+ *
+ * A lease this long is unusable without one, and here it does a second job: the
+ * preview on the page shows these bytes inside a sandboxed iframe that nothing
+ * outside can scroll or highlight. An in-document fragment link is the only
+ * thing that still works in there, so the contents list is how a reader gets
+ * from "the lease has a clause about that" to the clause itself.
+ */
+function tableOfContents(doc: LeaseDoc): string {
+  const entry = (s: { ref: string; title: string }) =>
+    `<li><a href="#${anchorFor(s.ref)}"><span class="ref">§${esc(s.ref)}</span><span>${esc(s.title)}</span></a></li>`;
+  const articles = doc.articles
+    .map(
+      (a) =>
+        `<li class="art">Article ${esc(a.numeral)} — ${esc(a.title)}` +
+        `<ul>${a.sections.map(entry).join("")}</ul></li>`,
+    )
+    .join("");
+  return `<nav class="toc" aria-label="Contents"><h2>Contents</h2><ul>${articles}</ul></nav>`;
+}
+
 export function renderLease(model: ScenarioModel): Artifact {
   const doc = buildLeaseDoc(model);
   const u = model.universe;
@@ -345,6 +368,7 @@ export function renderLease(model: ScenarioModel): Artifact {
     `<p>and</p><p><strong>${esc(model.lease.tenant)}</strong><br>Tenant</p>` +
     `<p class="small">${esc(u.premises_suite)}, ${esc(u.property_name)}<br>${esc(u.address.line1)}, ${esc(u.address.city)}, ${esc(u.address.state)} ${esc(u.address.zip)}</p>` +
     `<p style="margin-top:36px"><span class="stamp">Synthetic — training only</span></p></div>` +
+    tableOfContents(doc) +
     notice() +
     `</div>`;
 
@@ -355,7 +379,7 @@ export function renderLease(model: ScenarioModel): Artifact {
         a.sections
           .map(
             (s) =>
-              `<div class="sec${s.present ? "" : " silent"}">` +
+              `<div class="sec${s.present ? "" : " silent"}" id="${anchorFor(s.ref)}">` +
               `<p><span class="ref">§${esc(s.ref)} ${esc(s.title)}.</span> ` +
               s.paragraphs.map((p) => esc(p)).join('</p><p style="margin-left:1.5em">') +
               `</p></div>`,
