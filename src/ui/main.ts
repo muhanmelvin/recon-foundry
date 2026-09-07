@@ -64,12 +64,28 @@ interface DescribeState {
   applied: ForgeDraft | null;
 }
 
+/**
+ * The three stations a visitor moves through. Not gates: the package exists at
+ * every one of them, and every one is reachable from the step bar at any time.
+ * "Step" and not "tab" because `tab` already means the document being previewed.
+ */
+type Step = "forge" | "read" | "take";
+
+const STEPS: ReadonlyArray<{ id: Step; label: string }> = [
+  { id: "forge", label: "1 · Forge" },
+  { id: "read", label: "2 · Read" },
+  { id: "take", label: "3 · Take it away" },
+];
+
 interface State {
   config: ScenarioConfig;
   scenario: Scenario;
+  step: Step;
   tab: string;
   sheet: string;
   year: number;
+  /** The one tie whose detail is open, if any. */
+  openTie: TieId | null;
   trainingMode: boolean;
   describe: DescribeState;
   /**
@@ -129,9 +145,11 @@ const state: State = (() => {
   return {
     config,
     scenario,
-    tab: "workbook",
+    step: "forge",
+    tab: "lease",
     sheet: "ReconciliationSummary",
     year: scenario.model.years[scenario.model.years.length - 1]!.year,
+    openTie: null,
     trainingMode: true,
     describe: { open: false, description: "", paste: "", result: null, applied: null },
     configError: null,
@@ -360,9 +378,14 @@ function forgePanel(): HTMLElement {
     h(
       "p",
       { class: "field-hint" },
-      `Forged: ${u.property_name}, ${u.address.city}, ${u.address.state} — ${u.tenant_name}, ${years[0]}–${years[years.length - 1]}.`,
+      `Forged: ${u.property_name}, ${u.address.city}, ${u.address.state} — ${u.tenant_name}, ${years[0]}–${years[years.length - 1]}.` +
+        (riderCount() > 0 ? ` Rider: ${riderCount()} clause${riderCount() === 1 ? "" : "s"}.` : ""),
     ),
   );
+}
+
+function riderCount(): number {
+  return state.config.clauses?.length ?? 0;
 }
 
 // ---------------------------------------------------------------------------
@@ -559,43 +582,75 @@ function applyDraft(draft: ForgeDraft): void {
 }
 
 // ---------------------------------------------------------------------------
-// The ties panel
+// The ties
 // ---------------------------------------------------------------------------
 
-function tiesPanel(): HTMLElement {
-  const breaks = state.scenario.breaks;
-  const broken = new Set(breaks.map((b) => b.tie));
-  const ties = Object.keys(TIE_TITLES) as TieId[];
+const TIE_IDS = Object.keys(TIE_TITLES) as TieId[];
+
+function brokenTies(): Set<TieId> {
+  return new Set(state.scenario.breaks.map((b) => b.tie));
+}
+
+/**
+ * Seven marks across the top of the Read step, one to a tie, each opening on to
+ * what it means and — outside training mode — where it went wrong.
+ *
+ * This is what "watch it being built" comes to in an app where forging is
+ * instant. There is no build to animate; what a visitor actually needs to see is
+ * which pairs of documents have to agree, and that six of the seven still do.
+ */
+function tiesStrip(): HTMLElement {
+  const broken = brokenTies();
+  const open = state.openTie;
+  const detail = open === null ? [] : state.scenario.breaks.filter((b) => b.tie === open);
 
   return h(
     "div",
     { class: "panel ties" },
     h("h3", {}, "Does it tie?"),
     h(
-      "p",
-      { class: "field-hint" },
-      "Seven places where two documents have to agree. In a clean package all seven hold to the cent; a planted overcharge breaks exactly one, and everything else still adds — which is why the arithmetic never gives it away.",
+      "div",
+      { class: "ties-strip", role: "group", "aria-label": "The seven ties" },
+      ...TIE_IDS.map((tie) => {
+        const isBroken = broken.has(tie);
+        return h(
+          "button",
+          {
+            type: "button",
+            class: "tiemark" + (isBroken ? " tie-broken" : "") + (tie === open ? " on" : ""),
+            "aria-expanded": tie === open ? "true" : "false",
+            "aria-label": `${tie} — ${TIE_TITLES[tie]} — ${isBroken ? "broken" : "holds"}`,
+            onclick: () => {
+              state.openTie = tie === open ? null : tie;
+              renderAll();
+            },
+          },
+          h("span", { class: "tie-mark", "aria-hidden": "true" }, isBroken ? "✕" : "✓"),
+          tie,
+        );
+      }),
     ),
-    ...ties.map((tie) => {
-      const isBroken = broken.has(tie);
-      const detail = breaks.filter((b) => b.tie === tie);
-      return h(
-        "div",
-        { class: "tie" + (isBroken ? " tie-broken" : "") },
-        h("span", { class: "tie-mark", "aria-hidden": "true" }, isBroken ? "✕" : "✓"),
-        h(
+    open === null
+      ? h(
+          "p",
+          { class: "field-hint" },
+          "Seven places where two documents have to agree. In a clean package all seven hold to the cent; a planted overcharge breaks exactly one, and everything else still adds — which is why the arithmetic never gives it away. Pick one to read it.",
+        )
+      : h(
           "div",
-          {},
-          h("div", { class: "tie-name" }, `${tie} · ${TIE_TITLES[tie]}`, h("span", { class: "tie-state" }, isBroken ? " — broken" : " — holds")),
-          h("div", { class: "field-hint" }, TIE_STATEMENTS[tie]),
-          isBroken && !state.trainingMode
-            ? h("ul", { class: "tie-detail" }, ...detail.slice(0, 4).map((b) => h("li", {}, `${b.year}${b.category ? " · " + b.category : ""} — ${b.detail}`)))
-            : isBroken
-              ? h("div", { class: "field-hint" }, "Turn training mode off to see where.")
-              : null,
+          { class: "tie" + (broken.has(open) ? " tie-broken" : "") },
+          h(
+            "div",
+            {},
+            h("div", { class: "tie-name" }, `${open} · ${TIE_TITLES[open]}`, h("span", { class: "tie-state" }, broken.has(open) ? " — broken" : " — holds")),
+            h("div", { class: "field-hint" }, TIE_STATEMENTS[open]),
+            !broken.has(open)
+              ? null
+              : state.trainingMode
+                ? h("div", { class: "field-hint" }, "Turn training mode off to see where.")
+                : h("ul", { class: "tie-detail" }, ...detail.slice(0, 4).map((b) => h("li", {}, `${b.year}${b.category ? " · " + b.category : ""} — ${b.detail}`))),
+          ),
         ),
-      );
-    }),
   );
 }
 
@@ -723,30 +778,105 @@ interface TabDef {
   id: string;
   label: string;
   perYear: boolean;
+  /** What this document was built from, in one line. */
+  provenance: string;
+  /** The ties it has to hold. Read off TIE_STATEMENTS, not guessed. */
+  ties: TieId[];
   build: () => HTMLElement | null;
   artifact: () => Artifact | null;
 }
 
+/**
+ * The documents, in the order the package assembles them: the lease first,
+ * because every other figure is argued from it, then the workbook the landlord
+ * computed, then the statement it produced, then the backup behind each line.
+ */
 function tabDefs(): TabDef[] {
   const { model, answerKey } = state.scenario;
   const y = state.year;
   const frame = (a: Artifact | null) => (a ? docFrame(a.bytes as string, a.title) : null);
 
   const list: TabDef[] = [
-    { id: "workbook", label: "Workbook", perYear: true, build: workbookPreview, artifact: () => renderReconWorkbook(model, y) },
-    { id: "statement", label: "Statement", perYear: true, build: () => frame(renderBillingStatement(model, y)), artifact: () => renderBillingStatement(model, y) },
-    { id: "tax", label: "Tax backup", perYear: true, build: () => frame(renderTaxBackup(model, y)), artifact: () => renderTaxBackup(model, y) },
-    { id: "insurance", label: "Insurance", perYear: true, build: () => frame(renderInsuranceBackup(model, y)), artifact: () => renderInsuranceBackup(model, y) },
-    { id: "project", label: "Project backup", perYear: true, build: () => frame(renderProjectBackup(model, y)), artifact: () => renderProjectBackup(model, y) },
-    { id: "amort", label: "Amortization", perYear: true, build: () => null, artifact: () => renderAmortizationWorkbook(model, y) },
-    { id: "ledger", label: "Tenant ledger", perYear: false, build: () => null, artifact: () => renderTenantLedger(model) },
-    { id: "lease", label: "Lease", perYear: false, build: () => frame(renderLease(model)), artifact: () => renderLease(model) },
+    {
+      id: "lease",
+      label: "Lease",
+      perYear: false,
+      provenance: "Built from the lease terms: the premises, the share, the cap, the fee base, the capital threshold and its life.",
+      ties: ["T7"],
+      build: () => frame(renderLease(model)),
+      artifact: () => renderLease(model),
+    },
+    {
+      id: "workbook",
+      label: "Workbook",
+      perYear: true,
+      provenance: "Built from the year's expense categories and the invoices booked against each of them.",
+      ties: ["T1", "T3", "T7"],
+      build: workbookPreview,
+      artifact: () => renderReconWorkbook(model, y),
+    },
+    {
+      id: "statement",
+      label: "Statement",
+      perYear: true,
+      provenance: "Built from the reconciliation on the workbook, at the tenant's proportionate share.",
+      ties: ["T2"],
+      build: () => frame(renderBillingStatement(model, y)),
+      artifact: () => renderBillingStatement(model, y),
+    },
+    {
+      id: "tax",
+      label: "Tax backup",
+      perYear: true,
+      provenance: "Built from each parcel's assessment and rate, the instalments the county billed, and any credit it granted.",
+      ties: ["T4"],
+      build: () => frame(renderTaxBackup(model, y)),
+      artifact: () => renderTaxBackup(model, y),
+    },
+    {
+      id: "insurance",
+      label: "Insurance",
+      perYear: true,
+      provenance: "Built from the carrier's policy year: the premium, the policy fees and the coverages declared.",
+      ties: ["T5"],
+      build: () => frame(renderInsuranceBackup(model, y)),
+      artifact: () => renderInsuranceBackup(model, y),
+    },
+    {
+      id: "project",
+      label: "Project backup",
+      perYear: true,
+      provenance: "Built from the contractor's contract sum and the date the work was placed in service.",
+      ties: ["T6"],
+      build: () => frame(renderProjectBackup(model, y)),
+      artifact: () => renderProjectBackup(model, y),
+    },
+    {
+      id: "amort",
+      label: "Amortization",
+      perYear: true,
+      provenance: "Built from the project's cost over its recovery period, with interest on the unamortized balance.",
+      ties: ["T6"],
+      build: () => null,
+      artifact: () => renderAmortizationWorkbook(model, y),
+    },
+    {
+      id: "ledger",
+      label: "Tenant ledger",
+      perYear: false,
+      provenance: "Built from the estimates charged month by month, the payments posted against them and the true-up on delivery.",
+      ties: ["T3"],
+      build: () => null,
+      artifact: () => renderTenantLedger(model),
+    },
   ];
   if (!state.trainingMode) {
     list.push({
       id: "answer",
       label: "Answer key",
       perYear: false,
+      provenance: "Built from the schemes you planted — the only document here that knows they exist.",
+      ties: [],
       build: () => frame(renderAnswerSheet(model, answerKey)),
       artifact: () => renderAnswerSheet(model, answerKey),
     });
@@ -756,11 +886,12 @@ function tabDefs(): TabDef[] {
 
 function previewPanel(): HTMLElement {
   const defs = tabDefs();
-  if (!defs.some((d) => d.id === state.tab)) state.tab = "workbook";
+  if (!defs.some((d) => d.id === state.tab)) state.tab = defs[0]!.id;
   const active = defs.find((d) => d.id === state.tab)!;
   const years = state.scenario.model.years.map((y) => y.year);
   const artifact = active.artifact();
   const body = active.build();
+  const broken = brokenTies();
 
   return h(
     "div",
@@ -784,6 +915,24 @@ function previewPanel(): HTMLElement {
           d.label,
         ),
       ),
+    ),
+    // What this document was made from, and which ties it is answerable for.
+    // The point of a forged package is that the documents reproduce from each
+    // other; saying so beside each one is the whole lesson.
+    h(
+      "p",
+      { class: "docmeta" },
+      active.provenance,
+      active.ties.length > 0
+        ? h(
+            "span",
+            {},
+            " · must hold ",
+            ...active.ties.map((tie, i) =>
+              h("span", { class: "docmeta-tie" + (broken.has(tie) ? " tie-broken" : "") }, `${i > 0 ? ", " : ""}${tie} ${broken.has(tie) ? "✕" : "✓"}`),
+            ),
+          )
+        : null,
     ),
     active.perYear
       ? h(
@@ -820,15 +969,6 @@ function previewPanel(): HTMLElement {
 function downloadsPanel(): HTMLElement {
   const { model, answerKey } = state.scenario;
   const findings = answerKey.findings;
-
-  const toggle = h("input", {
-    type: "checkbox",
-    onchange: (e: Event) => {
-      state.trainingMode = (e.target as HTMLInputElement).checked;
-      renderAll();
-    },
-  }) as HTMLInputElement;
-  toggle.checked = state.trainingMode;
 
   return h(
     "div",
@@ -916,12 +1056,7 @@ function downloadsPanel(): HTMLElement {
         ),
 
     h("h3", {}, "Answer key"),
-    h(
-      "label",
-      { class: "scheme" },
-      toggle,
-      h("span", {}, h("strong", {}, "Training mode"), h("span", { class: "field-hint" }, "On: the answers stay hidden, and the ties panel says only that something is broken.")),
-    ),
+    h("p", { class: "field-hint" }, "Training mode is the switch at the end of the step bar. On, the answers stay hidden and a broken tie says only that it is broken."),
     state.trainingMode
       ? h("p", { class: "field-hint" }, findings.length === 0 ? "Nothing is planted in this package." : `${findings.length} finding${findings.length === 1 ? "" : "s"} planted. Turn training mode off to see them.`)
       : findings.length === 0
@@ -956,18 +1091,85 @@ function downloadsPanel(): HTMLElement {
 
 // ---------------------------------------------------------------------------
 
+// ---------------------------------------------------------------------------
+// The three steps
+// ---------------------------------------------------------------------------
+
+function stepBar(): HTMLElement {
+  const toggle = h("input", {
+    type: "checkbox",
+    onchange: (e: Event) => {
+      state.trainingMode = (e.target as HTMLInputElement).checked;
+      renderAll();
+    },
+  }) as HTMLInputElement;
+  toggle.checked = state.trainingMode;
+
+  return h(
+    "div",
+    { class: "stepbar" },
+    h(
+      "div",
+      { class: "steps", role: "tablist", "aria-label": "Where you are" },
+      ...STEPS.map((s) =>
+        h(
+          "button",
+          {
+            type: "button",
+            role: "tab",
+            class: "step" + (s.id === state.step ? " on" : ""),
+            "aria-selected": s.id === state.step ? "true" : "false",
+            onclick: () => goTo(s.id),
+          },
+          s.label,
+        ),
+      ),
+    ),
+    // Training mode belongs here rather than on one step: it decides what two
+    // of the three show, so it has to be reachable from all of them.
+    h("label", { class: "trainer" }, toggle, h("span", {}, "Training mode")),
+  );
+}
+
+function goTo(step: Step): void {
+  state.step = step;
+  renderAll();
+}
+
+function stepNav(): HTMLElement | null {
+  const i = STEPS.findIndex((s) => s.id === state.step);
+  const back = STEPS[i - 1];
+  const next = STEPS[i + 1];
+  if (!back && !next) return null;
+  return h(
+    "div",
+    { class: "stepnav" },
+    back ? h("button", { type: "button", class: "ghost", onclick: () => goTo(back.id) }, `← ${back.label.replace(/^\d+ · /, "")}`) : h("span", {}),
+    next ? h("button", { type: "button", class: "ghost", onclick: () => goTo(next.id) }, `${next.label.replace(/^\d+ · /, "")} →`) : null,
+  );
+}
+
+/** Only the active step is built. `artifact()` zips a workbook; do it once. */
+function stepPanel(): HTMLElement {
+  if (state.step === "forge") {
+    return h(
+      "div",
+      { class: "step-body" },
+      describePanel(),
+      forgePanel(),
+      h("div", { class: "panel" }, h("button", { type: "button", class: "primary", onclick: () => goTo("read") }, "Forge it and read it →")),
+    );
+  }
+  if (state.step === "take") {
+    return h("div", { class: "step-body" }, downloadsPanel());
+  }
+  return h("div", { class: "step-body" }, tiesStrip(), previewPanel());
+}
+
 function renderAll(): void {
   const root = $("app");
   clear(root);
-  root.appendChild(
-    h(
-      "div",
-      { class: "layout" },
-      h("div", { class: "col-left" }, describePanel(), forgePanel(), tiesPanel()),
-      h("div", { class: "col-main" }, previewPanel()),
-      h("div", { class: "col-right" }, downloadsPanel()),
-    ),
-  );
+  root.appendChild(h("div", { class: "layout" }, stepBar(), stepPanel(), stepNav()));
 }
 
 // The ties panel has to be checking, not decorating: recomputing from the model

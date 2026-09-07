@@ -1,38 +1,80 @@
 /* App-specific styling. Shared chrome and tokens live in src/shared/ — put
    anything another app would also want there instead, and copy it across. */
 
-.layout {
-  display: grid;
-  grid-template-columns: minmax(300px, 25rem) minmax(0, 1fr) minmax(280px, 23rem);
-  gap: 1.25rem;
-  align-items: start;
-}
+/* One column, three steps. The page used to run all three flows side by side;
+   nothing had room, least of all the document being read. */
 
-.col-left,
-.col-main,
-.col-right {
+.layout,
+.step-body {
   display: flex;
   flex-direction: column;
   gap: 1.25rem;
   min-width: 0;
 }
 
-@media (max-width: 1200px) {
-  .layout {
-    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-  }
-  .col-main {
-    grid-column: 1 / -1;
-    order: 3;
-  }
+/* ── The step bar ─────────────────────────────────────────────────────────
+   Where you are, and the one switch that decides what two of the three steps
+   are allowed to show. */
+
+.stepbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem 1.25rem;
+  align-items: center;
+  justify-content: space-between;
+  border-bottom: 1px solid var(--rule);
+  padding-bottom: 0.7rem;
 }
 
-@media (max-width: 760px) {
-  .layout {
+.steps {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+}
+
+.step {
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--ink-muted);
+  font-size: 0.95rem;
+  padding: 0.35rem 0.8rem;
+}
+.step.on {
+  background: var(--accent-soft);
+  border-color: var(--accent);
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.trainer {
+  display: flex;
+  gap: 0.45rem;
+  align-items: center;
+  font-size: 0.86rem;
+  color: var(--ink-muted);
+  cursor: pointer;
+}
+.trainer input {
+  accent-color: var(--accent);
+}
+
+.stepnav {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+/* The lease, and the rail that builds its Rider. */
+.read-layout {
+  display: grid;
+  grid-template-columns: minmax(240px, 20rem) minmax(0, 1fr);
+  gap: 1.25rem;
+  align-items: start;
+}
+
+@media (max-width: 900px) {
+  .read-layout {
     grid-template-columns: minmax(0, 1fr);
-  }
-  .col-main {
-    order: 0;
   }
 }
 
@@ -184,6 +226,37 @@ a.button-link:focus-visible {
 
 /* ── Ties ─────────────────────────────────────────────────────────────── */
 
+.ties-strip {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  margin-bottom: 0.6rem;
+}
+
+.tiemark {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 0.86rem;
+  font-variant-numeric: tabular-nums;
+  padding: 0.28rem 0.55rem;
+  color: var(--ink-muted);
+}
+.tiemark.on {
+  border-color: var(--accent);
+  color: var(--accent);
+  font-weight: 600;
+}
+.tiemark .tie-mark {
+  width: 1.15rem;
+  height: 1.15rem;
+  font-size: 0.72rem;
+}
+.tiemark.tie-broken .tie-mark {
+  background: var(--high-soft);
+  color: var(--high-ink);
+}
+
 .tie {
   display: flex;
   gap: 0.6rem;
@@ -264,6 +337,22 @@ a.button-link:focus-visible {
   background: var(--accent-soft);
   border-color: var(--accent);
   color: var(--accent);
+  font-weight: 600;
+}
+
+/* What the document on screen was built from, and what it has to agree with. */
+.docmeta {
+  margin: 0 0 0.7rem;
+  font-size: 0.84rem;
+  line-height: 1.5;
+  color: var(--ink-muted);
+}
+.docmeta-tie {
+  font-variant-numeric: tabular-nums;
+  color: var(--ok);
+}
+.docmeta-tie.tie-broken {
+  color: var(--high-ink);
   font-weight: 600;
 }
 
