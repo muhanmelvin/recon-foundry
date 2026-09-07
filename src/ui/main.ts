@@ -54,7 +54,6 @@ import { scannerUrl } from "./scanner-link.ts";
 // ---------------------------------------------------------------------------
 
 interface DescribeState {
-  open: boolean;
   /** What the visitor wrote. Never leaves the page, never reaches the engine. */
   description: string;
   /** What their AI handed back. */
@@ -152,7 +151,7 @@ const state: State = (() => {
     year: scenario.model.years[scenario.model.years.length - 1]!.year,
     openTie: null,
     trainingMode: true,
-    describe: { open: false, description: "", paste: "", result: null, applied: null },
+    describe: { description: "", paste: "", result: null, applied: null },
     configError: null,
   };
 })();
@@ -414,12 +413,10 @@ function describePanel(): HTMLElement {
 
   const counter = h("span", { class: "field-hint" }) as HTMLSpanElement;
   const copyBtn = h("button", { type: "button", class: "ghost" }, "Copy the prompt") as HTMLButtonElement;
-  const promptBox = h("textarea", {
-    class: "prompt-box mono",
-    readonly: true,
-    rows: "8",
-    "aria-label": "The configuration prompt",
-  }) as HTMLTextAreaElement;
+  // The prompt is output, so it is not a form control. It was a readonly
+  // textarea, and a textarea that takes a caret and refuses the keystroke reads
+  // as a broken input however it is styled.
+  const promptBox = h("pre", { class: "prompt-box mono", "aria-label": "The configuration prompt" }) as HTMLPreElement;
 
   function refresh(): void {
     const words = countWords(d.description);
@@ -427,7 +424,11 @@ function describePanel(): HTMLElement {
     counter.textContent = `${words} / ${MAX_DESCRIPTION_WORDS} words${over ? " — too long to build a prompt from" : ""}`;
     counter.className = "field-hint" + (over ? " over" : "");
     copyBtn.disabled = words === 0 || over;
-    promptBox.value = words === 0 ? "" : buildDescribePrompt(d.description);
+    promptBox.textContent = words === 0 ? "" : buildDescribePrompt(d.description);
+    // Nothing below the description is any use until something is written, and
+    // an empty prompt sitting under an empty box is what made the panel read as
+    // a form that did not work.
+    rest.hidden = words === 0;
   }
 
   const descBox = h("textarea", {
@@ -439,16 +440,15 @@ function describePanel(): HTMLElement {
     "aria-label": "Describe your business",
     oninput: (e: Event) => {
       // Deliberately not a re-render: redrawing the page under a textarea takes
-      // the cursor with it. The three things that depend on this value are
-      // updated in place instead.
+      // the cursor with it. The things that depend on this value are updated in
+      // place instead.
       d.description = (e.target as HTMLTextAreaElement).value;
       refresh();
     },
   }) as HTMLTextAreaElement;
   descBox.value = d.description;
 
-  copyBtn.addEventListener("click", () => copyText(promptBox.value, copyBtn));
-  refresh();
+  copyBtn.addEventListener("click", () => copyText(promptBox.textContent ?? "", copyBtn));
 
   const pasteBox = h("textarea", {
     class: "describe-box mono",
@@ -479,48 +479,31 @@ function describePanel(): HTMLElement {
     "Fill in the controls",
   );
 
-  const header = h(
-    "button",
-    {
-      type: "button",
-      class: "disclosure",
-      "aria-expanded": d.open ? "true" : "false",
-      onclick: () => {
-        d.open = !d.open;
-        renderAll();
-      },
-    },
-    h("span", { class: "disclosure-mark", "aria-hidden": "true" }, d.open ? "▾" : "▸"),
-    "Describe it instead",
-  );
-
-  if (!d.open) {
-    return h(
-      "div",
-      { class: "panel describe" },
-      header,
-      h("p", { class: "field-hint" }, "Write what your business leases in plain words and let an AI set the controls below. The page never calls one itself."),
-    );
-  }
-
-  return h(
+  const rest = h(
     "div",
-    { class: "panel describe" },
-    header,
-    h(
-      "p",
-      { class: "field-hint" },
-      "This page never calls an AI. Copy the prompt into the one you already use, bring back the JSON, and it fills in the controls below — which you can then override. ",
-      h("strong", {}, "What you write here is sent nowhere by this page and stored nowhere; if you paste it into an AI service, that is you sending it to that service."),
-      " Nothing you write reaches the forged package: every name in it comes from this app's own invented bank.",
-    ),
-    field("Describe your business", descBox),
+    { class: "describe-rest" },
     counter,
     h("div", { class: "row" }, copyBtn),
     promptBox,
     field("Paste what your AI returned", pasteBox),
     h("div", { class: "row" }, applyBtn),
     draftVerdict(),
+  ) as HTMLDivElement;
+  refresh();
+
+  return h(
+    "div",
+    { class: "panel describe" },
+    h("h3", {}, "Describe it instead"),
+    h(
+      "p",
+      { class: "field-hint" },
+      "Write what your business leases in plain words. This page never calls an AI: copy the prompt it builds into the one you already use, bring back the JSON, and it fills in the controls below — which you can then override. ",
+      h("strong", {}, "What you write here is sent nowhere by this page and stored nowhere; if you paste it into an AI service, that is you sending it to that service."),
+      " Nothing you write reaches the forged package: every name in it comes from this app's own invented bank.",
+    ),
+    field("Describe your business", descBox),
+    rest,
   );
 }
 

@@ -494,28 +494,6 @@ table.sheet tr:first-child td {
   border-color: var(--accent);
 }
 
-/* A heading that opens something. It is a button because it does something —
-   a styled <h3> with a click handler is unreachable from the keyboard. */
-.disclosure {
-  display: flex;
-  align-items: center;
-  gap: 0.45rem;
-  width: 100%;
-  border: 0;
-  background: none;
-  padding: 0 0 0.5rem;
-  font-size: 0.82rem;
-  letter-spacing: 0.07em;
-  text-transform: uppercase;
-  color: var(--ink-muted);
-}
-.disclosure:hover {
-  color: var(--accent);
-}
-.disclosure-mark {
-  color: var(--accent);
-}
-
 input[type="number"],
 textarea {
   font: inherit;
@@ -538,13 +516,21 @@ textarea:focus-visible {
   line-height: 1.45;
 }
 
-/* The built prompt: readable, obviously not an input, and sunk so it reads as
-   output rather than as another thing to fill in. */
+/* The built prompt. A <pre>, not a control: it is what the panel produced, and
+   the visitor's business with it is to copy it. */
 .prompt-box {
-  resize: vertical;
+  margin: 0.5rem 0 0;
+  padding: 0.55rem 0.65rem;
   background: var(--surface-sunk);
-  border-style: dashed;
-  margin-top: 0.5rem;
+  border: 1px solid var(--rule);
+  border-radius: 5px;
+  color: var(--ink-muted);
+  font-size: 0.84rem;
+  line-height: 1.45;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  max-height: 15rem;
+  overflow: auto;
 }
 
 .field-hint.over {
