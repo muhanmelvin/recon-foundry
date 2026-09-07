@@ -17,7 +17,7 @@
 import type { ScenarioModel, TaxParcel } from "../model/types.ts";
 import { longDate, monthName, shortDate } from "../dates.ts";
 import { amortizationForYear } from "../scanner-rules.ts";
-import { buildLeaseDoc, sectionsOf, type LeaseDoc } from "./lease/doc.ts";
+import { buildLeaseDoc, sectionsOf, type LeaseArticle, type LeaseDoc } from "./lease/doc.ts";
 import { anchorFor } from "./lease/sections.ts";
 import { esc, htmlDocument, pct, rows, usd } from "./html.ts";
 import { documentName, termDocumentName } from "../package/filenames.ts";
@@ -336,6 +336,8 @@ export function renderProjectBackup(model: ScenarioModel, year: number): Artifac
 // The lease
 // ---------------------------------------------------------------------------
 
+const RIDER_HEADING = "Rider — Additional Provisions";
+
 /**
  * The contents page — every article and section, each a link to the clause.
  *
@@ -348,14 +350,16 @@ export function renderProjectBackup(model: ScenarioModel, year: number): Artifac
 function tableOfContents(doc: LeaseDoc): string {
   const entry = (s: { ref: string; title: string }) =>
     `<li><a href="#${anchorFor(s.ref)}"><span class="ref">§${esc(s.ref)}</span><span>${esc(s.title)}</span></a></li>`;
-  const articles = doc.articles
-    .map(
-      (a) =>
-        `<li class="art">Article ${esc(a.numeral)} — ${esc(a.title)}` +
-        `<ul>${a.sections.map(entry).join("")}</ul></li>`,
-    )
-    .join("");
-  return `<nav class="toc" aria-label="Contents"><h2>Contents</h2><ul>${articles}</ul></nav>`;
+  const group = (label: string, sections: LeaseArticle["sections"]) =>
+    `<li class="art">${esc(label)}<ul>${sections.map(entry).join("")}</ul></li>`;
+
+  const articles = doc.articles.map((a) => group(`Article ${a.numeral} — ${a.title}`, a.sections)).join("");
+  const rider =
+    doc.rider.length > 0
+      ? `<li class="art">${esc(RIDER_HEADING)}</li>` + doc.rider.map((a) => group(`${a.numeral} — ${a.title}`, a.sections)).join("")
+      : "";
+
+  return `<nav class="toc" aria-label="Contents"><h2>Contents</h2><ul>${articles}${rider}</ul></nav>`;
 }
 
 export function renderLease(model: ScenarioModel): Artifact {
@@ -372,23 +376,29 @@ export function renderLease(model: ScenarioModel): Artifact {
     notice() +
     `</div>`;
 
-  const body = doc.articles
-    .map(
-      (a) =>
-        `<h2>Article ${esc(a.numeral)} — ${esc(a.title)}</h2>` +
-        a.sections
-          .map(
-            (s) =>
-              `<div class="sec${s.present ? "" : " silent"}" id="${anchorFor(s.ref)}">` +
-              `<p><span class="ref">§${esc(s.ref)} ${esc(s.title)}.</span> ` +
-              s.paragraphs.map((p) => esc(p)).join('</p><p style="margin-left:1.5em">') +
-              `</p></div>`,
-          )
-          .join(""),
-    )
-    .join("");
+  const clauses = (a: LeaseArticle) =>
+    a.sections
+      .map(
+        (s) =>
+          `<div class="sec${s.present ? "" : " silent"}" id="${anchorFor(s.ref)}">` +
+          `<p><span class="ref">§${esc(s.ref)} ${esc(s.title)}.</span> ` +
+          s.paragraphs.map((p) => esc(p)).join('</p><p style="margin-left:1.5em">') +
+          `</p></div>`,
+      )
+      .join("");
 
-  const pages = cover + `<div class="page">` + body + notice() + `</div>`;
+  const body = doc.articles.map((a) => `<h2>Article ${esc(a.numeral)} — ${esc(a.title)}</h2>` + clauses(a)).join("");
+
+  // The Rider rides after Article VII, never inside it: Articles I–VII are the
+  // numbering the scanner's findings cite, and nothing optional may push a
+  // citation along.
+  const rider =
+    doc.rider.length > 0
+      ? `<h2>${esc(RIDER_HEADING)}</h2>` +
+        doc.rider.map((a) => `<h2>${esc(a.numeral)} — ${esc(a.title)}</h2>` + clauses(a)).join("")
+      : "";
+
+  const pages = cover + `<div class="page">` + body + rider + notice() + `</div>`;
   const lastYear = model.years[model.years.length - 1]!.year;
 
   return {

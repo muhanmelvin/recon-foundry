@@ -24,6 +24,7 @@
 import type { LeaseAbstract, ScenarioModel } from "../../model/types.ts";
 import { longDate } from "../../dates.ts";
 import { ARTICLES, SECTION_TITLE } from "./sections.ts";
+import { buildRider } from "./rider.ts";
 
 export interface LeaseSection {
   ref: string;
@@ -42,7 +43,10 @@ export interface LeaseArticle {
 export interface LeaseDoc {
   title: string;
   parties: string;
+  /** Articles I–VII, always all seven, in the scanner's numbering. */
   articles: LeaseArticle[];
+  /** The optional clauses, R1 onward. Empty unless the config asked for some. */
+  rider: LeaseArticle[];
 }
 
 // ---------------------------------------------------------------------------
@@ -221,8 +225,16 @@ export function buildLeaseDoc(model: ScenarioModel): LeaseDoc {
   put("7.01", true, [
     `Notices under this Lease shall be in writing and delivered to Landlord c/o ${u.management_agent} and to Tenant at ${u.premises_suite}, ${u.address.line1}, ${u.address.city}, ${u.address.state_abbr} ${u.address.zip}.`,
   ]);
+  // The Rider is built before §7.02 is written, because §7.02 has to know
+  // whether there is one. A lease with no Rider says nothing about a Rider —
+  // that silence is what keeps the file byte-identical to the one forged
+  // before optional clauses existed.
+  const rider = buildRider(model);
   put("7.02", true, [
-    "This Lease is the entire agreement of the parties as to its subject matter. No statement on a reconciliation, and no course of billing, amends it.",
+    "This Lease is the entire agreement of the parties as to its subject matter. No statement on a reconciliation, and no course of billing, amends it." +
+      (rider.length > 0
+        ? " The Rider attached to it is part of it; where a provision of the Rider and a provision of Articles I through VII address the same matter, the Article governs."
+        : ""),
   ]);
 
   return {
@@ -233,10 +245,11 @@ export function buildLeaseDoc(model: ScenarioModel): LeaseDoc {
       title: a.title,
       sections: a.sections.map((s) => S[s.ref] ?? { ref: s.ref, title: s.title, present: false, paragraphs: [] }),
     })),
+    rider,
   };
 }
 
-/** Flatten the document to sections, in numbering order. */
+/** Flatten the document to sections, in numbering order — the Rider last. */
 export function sectionsOf(doc: LeaseDoc): LeaseSection[] {
-  return doc.articles.flatMap((a) => a.sections);
+  return [...doc.articles, ...doc.rider].flatMap((a) => a.sections);
 }

@@ -89,6 +89,9 @@ export function aboutText(model: ScenarioModel, key: AnswerKey): string {
     `Years:         ${model.years.map((y) => y.year).join(", ")}`,
     `Seed:          ${key.seed}`,
     `Scenario:      ${key.scenario_id}`,
+    // Only when there is one. A package with no Rider says nothing about a
+    // Rider, so its ZIP is the file it always was.
+    ...((model.config.clauses?.length ?? 0) > 0 ? [`Rider:         ${model.config.clauses!.length} additional clause(s) in the lease`] : []),
     "",
     "There is no such place as the State of Franklin, and no such ZIP code as",
     `${u.address.zip}. Every party, vendor, parcel, policy and figure in these`,

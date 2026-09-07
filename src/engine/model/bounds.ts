@@ -20,6 +20,7 @@
  */
 
 import { RESERVED_NAMES } from "../names.ts";
+import { CLAUSE_IDS } from "../render/lease/rider.ts";
 import type { ScenarioConfig } from "./types.ts";
 
 /** Square feet of premises. Below this is a kiosk; above it is a campus. */
@@ -105,6 +106,26 @@ export function validateScenarioConfig(config: ScenarioConfig): string[] {
       // bank could not draw these; a typed or pasted story could.
       const hit = RESERVED_NAMES.find((n) => config.story!.toLowerCase().includes(n.toLowerCase()));
       if (hit !== undefined) errors.push(`story: "${hit}" belongs to another app in the family and cannot appear in a forged package.`);
+    }
+  }
+
+  // The Rider's clauses. The rail on the page can only offer the twelve that
+  // exist, but a pasted config has never seen the rail — and a clause id that
+  // does not exist would otherwise vanish silently into a lease with a shorter
+  // Rider than the visitor asked for.
+  const clauses = config.clauses;
+  if (clauses !== undefined) {
+    if (!Array.isArray(clauses)) {
+      errors.push("clauses: the Rider is a list of clause ids — leave it out altogether for a lease of seven articles and no Rider.");
+    } else {
+      const unknown = [...new Set(clauses.filter((c) => !CLAUSE_IDS.includes(c)))];
+      if (unknown.length > 0) {
+        errors.push(`clauses: no clause is called ${unknown.map((c) => `"${String(c)}"`).join(", ")}. The Rider offers ${CLAUSE_IDS.join(", ")}.`);
+      }
+      const repeated = [...new Set(clauses.filter((c, i) => clauses.indexOf(c) !== i))];
+      if (repeated.length > 0) {
+        errors.push(`clauses: ${repeated.map((c) => `"${String(c)}"`).join(", ")} listed more than once — a clause is either in the Rider or it is not.`);
+      }
     }
   }
 

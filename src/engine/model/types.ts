@@ -13,6 +13,11 @@
  * document is rendered or a ReconPackage is exported.
  */
 
+// The Rider's clause ids live beside the clauses themselves, so the catalog and
+// the list of what may be asked for cannot drift apart. Type-only, so nothing
+// in the model depends on the renderer at run time.
+import type { ClauseId } from "../render/lease/rider.ts";
+
 export type PropertyKind = "retail_strip" | "office" | "industrial_flex";
 export type SizeBand = "small" | "medium" | "large";
 export type Bucket = "controllable" | "non_controllable";
@@ -73,6 +78,19 @@ export interface ScenarioConfig {
    * from the seeded name bank and could not carry a real name if it tried.
    */
   story?: string;
+  /**
+   * The optional clauses the lease carries, as a Rider after Article VII.
+   *
+   * Absent or empty means a lease of seven articles and no Rider — and, like
+   * `premises_sf` above, that must forge byte-for-byte what it forged before
+   * the Rider existed, which `tests/rider.test.ts` holds against the same
+   * fixtures. Order here is ignored: the Rider prints in catalog order, so two
+   * visitors who ticked the same clauses in different orders get the same file.
+   *
+   * A clause changes the prose lease and nothing else. It moves no money, plants
+   * no finding, and breaks no tie. See docs/adr/0005.
+   */
+  clauses?: ClauseId[];
 }
 
 export interface Address {
