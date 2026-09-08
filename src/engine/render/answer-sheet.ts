@@ -18,7 +18,7 @@ import type { ScenarioModel } from "../model/types.ts";
 import { TIE_STATEMENTS, TIE_TITLES } from "../model/ties.ts";
 import { esc, htmlDocument, pct, rows, usd } from "./html.ts";
 import { ANSWER_KEY_FOLDER, termDocumentName } from "../package/filenames.ts";
-import { SYNTHETIC_NOTICE, type Artifact } from "./artifact.ts";
+import { scannerName, syntheticNotice, type Artifact } from "./artifact.ts";
 
 function yearLabel(y: number | [number, number]): string {
   return Array.isArray(y) ? `${y[0]}–${y[1]}` : String(y);
@@ -82,7 +82,7 @@ export function renderAnswerSheet(model: ScenarioModel, key: AnswerKey): Artifac
     `<p><span class="stamp">Delete this folder before handing the package out</span></p>` +
     (clean
       ? `<h2>Nothing is wrong with this package</h2>` +
-        `<p>Every one of the seven ties holds to the cent, and the Red-Flag Scanner finds nothing in it at all — no swing worth asking about, no round figure, no repeated amount, no fee on a base the lease does not permit. That is the exercise: a package can foot perfectly and still be the one you have to be able to sign off on.</p>`
+        `<p>Every one of the seven ties holds to the cent, and the ${esc(scannerName(model.config.branding))} finds nothing in it at all — no swing worth asking about, no round figure, no repeated amount, no fee on a base the lease does not permit. That is the exercise: a package can foot perfectly and still be the one you have to be able to sign off on.</p>`
       : `<h2>${key.findings.length} finding${key.findings.length === 1 ? "" : "s"}, worth ${usd(key.total_planted_tenant_impact_cents)} to the tenant</h2>` +
         findingCards) +
     `<h2>The seven ties</h2><p class="small">Where each pair of documents must agree, and which ones this package breaks.</p>` +
@@ -111,7 +111,7 @@ export function renderAnswerSheet(model: ScenarioModel, key: AnswerKey): Artifac
           `<h2>${y.year} — billed against the lease</h2><dl class="facts">${rows(truthRows(key.ledger[y.year]!))}</dl>`,
       )
       .join("") +
-    `<p class="notice">${esc(SYNTHETIC_NOTICE)}</p>` +
+    `<p class="notice">${esc(syntheticNotice(model.config.branding))}</p>` +
     `</div>`;
 
   const lastYear = model.years[model.years.length - 1]!.year;

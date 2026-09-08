@@ -86,6 +86,11 @@ export interface WorkbookMeta {
   title: string;
   /** Shown in the file's properties. Says the data is synthetic even when the sheet is not open. */
   description: string;
+  /**
+   * Who the file says made it, in `docProps`. Absent gives the constant below,
+   * which is what every workbook this app forges for itself carries.
+   */
+  creator?: string;
 }
 
 const CREATOR = "Recon Foundry — synthetic training data";
@@ -185,6 +190,7 @@ export function writeWorkbook(sheets: readonly SheetSpec[], meta: WorkbookMeta):
   if (sheets.length === 0) throw new Error("a workbook needs at least one sheet");
   const names = sheets.map((s) => sheetName(s.name));
   if (new Set(names).size !== names.length) throw new Error(`two sheets share a name: ${names.join(", ")}`);
+  const creator = meta.creator ?? CREATOR;
 
   const contentTypes =
     `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>` +
@@ -236,8 +242,8 @@ export function writeWorkbook(sheets: readonly SheetSpec[], meta: WorkbookMeta):
     `xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:dcterms="http://purl.org/dc/terms/" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">` +
     `<dc:title>${esc(meta.title)}</dc:title>` +
     `<dc:subject>${esc(meta.description)}</dc:subject>` +
-    `<dc:creator>${esc(CREATOR)}</dc:creator>` +
-    `<cp:lastModifiedBy>${esc(CREATOR)}</cp:lastModifiedBy>` +
+    `<dc:creator>${esc(creator)}</dc:creator>` +
+    `<cp:lastModifiedBy>${esc(creator)}</cp:lastModifiedBy>` +
     `<dcterms:created xsi:type="dcterms:W3CDTF">${FIXED_TIMESTAMP}</dcterms:created>` +
     `<dcterms:modified xsi:type="dcterms:W3CDTF">${FIXED_TIMESTAMP}</dcterms:modified>` +
     `</cp:coreProperties>`;
@@ -246,7 +252,7 @@ export function writeWorkbook(sheets: readonly SheetSpec[], meta: WorkbookMeta):
     `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>` +
     `<Properties xmlns="http://schemas.openxmlformats.org/officeDocument/2006/extended-properties" ` +
     `xmlns:vt="http://schemas.openxmlformats.org/officeDocument/2006/docPropsVTypes">` +
-    `<Application>${esc(CREATOR)}</Application><Company></Company>` +
+    `<Application>${esc(creator)}</Application><Company></Company>` +
     `</Properties>`;
 
   const entries: ZipEntry[] = [

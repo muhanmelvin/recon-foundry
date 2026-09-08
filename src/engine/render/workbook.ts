@@ -41,7 +41,7 @@ import {
   type SheetSpec,
 } from "../xlsx/writer.ts";
 import { documentName, termDocumentName } from "../package/filenames.ts";
-import { SYNTHETIC_NOTICE, type Artifact } from "./artifact.ts";
+import { creatorName, syntheticNotice, type Artifact } from "./artifact.ts";
 
 const SECTION_ORDER = ["CAM", "Taxes", "Insurance", "Fees"] as const;
 
@@ -170,7 +170,7 @@ function summarySheet(model: ScenarioModel, reconYear: number): SheetSpec {
   ]);
 
   rows.push([blank()]);
-  rows.push([muted(SYNTHETIC_NOTICE)]);
+  rows.push([muted(syntheticNotice(model.config.branding))]);
 
   return {
     name: "ReconciliationSummary",
@@ -228,7 +228,7 @@ function glSheet(model: ScenarioModel, year: ModelYear): SheetSpec {
     money(sum(year.gl.map((g) => g.amount_cents)), S.moneyTotal),
   ]);
   rows.push([blank()]);
-  rows.push([muted(SYNTHETIC_NOTICE)]);
+  rows.push([muted(syntheticNotice(model.config.branding))]);
 
   return { name: "GL Detail", rows, widths: [10, 12, 10, 34, 32, 46, 15], freezeRows: 4 };
 }
@@ -275,7 +275,7 @@ function capSheet(model: ScenarioModel, reconYear: number): SheetSpec | null {
   }
 
   rows.push([blank()]);
-  rows.push([muted(SYNTHETIC_NOTICE)]);
+  rows.push([muted(syntheticNotice(model.config.branding))]);
 
   return { name: "CAP Calc", rows, widths: [10, 20, 20, 18, 26, 18, 15], freezeRows: 5 };
 }
@@ -306,7 +306,7 @@ function paymentSheet(model: ScenarioModel, year: ModelYear): SheetSpec {
   const estimates = sum(inYear.filter((e) => e.code === "EST").map((e) => e.charge_cents));
   rows.push([blank(), text(`Total operating expense estimates charged in ${year.year}`, S.header), money(estimates, S.moneyTotal), blank(), blank()]);
   rows.push([blank()]);
-  rows.push([muted(SYNTHETIC_NOTICE)]);
+  rows.push([muted(syntheticNotice(model.config.branding))]);
 
   return { name: "Payment History", rows, widths: [12, 52, 15, 15, 15], freezeRows: 4 };
 }
@@ -329,7 +329,8 @@ export function renderReconWorkbook(model: ScenarioModel, reconYear: number): Ar
     year: reconYear,
     bytes: writeWorkbook(sheets, {
       title: `${model.universe.property_name} — ${reconYear} operating expense reconciliation`,
-      description: SYNTHETIC_NOTICE,
+      description: syntheticNotice(model.config.branding),
+      creator: creatorName(model.config.branding),
     }),
   };
 }
@@ -385,7 +386,7 @@ export function renderAmortizationWorkbook(model: ScenarioModel, reconYear: numb
   }
 
   rows.push([blank()]);
-  rows.push([muted(SYNTHETIC_NOTICE)]);
+  rows.push([muted(syntheticNotice(model.config.branding))]);
 
   return {
     filename: documentName(model.universe.site_code, reconYear, "Amortization Schedule", model.delivery[reconYear]!, "xlsx"),
@@ -394,7 +395,8 @@ export function renderAmortizationWorkbook(model: ScenarioModel, reconYear: numb
     year: reconYear,
     bytes: writeWorkbook([{ name: "Amortization", rows, widths: [30, 38, 16, 14, 24, 20, 20, 20, 20, 14, 14, 18, 18, 20], freezeRows: 4 }], {
       title: `${model.universe.property_name} — capital amortization schedule`,
-      description: SYNTHETIC_NOTICE,
+      description: syntheticNotice(model.config.branding),
+      creator: creatorName(model.config.branding),
     }),
   };
 }
@@ -422,7 +424,7 @@ export function renderTenantLedger(model: ScenarioModel): Artifact {
   }
 
   rows.push([blank()]);
-  rows.push([muted(SYNTHETIC_NOTICE)]);
+  rows.push([muted(syntheticNotice(model.config.branding))]);
 
   const lastYear = model.years[model.years.length - 1]!.year;
   return {
@@ -432,7 +434,8 @@ export function renderTenantLedger(model: ScenarioModel): Artifact {
     year: null,
     bytes: writeWorkbook([{ name: "Tenant Ledger", rows, widths: [12, 12, 8, 52, 15, 15, 15], freezeRows: 4 }], {
       title: `${u.tenant_name} — tenant account detail`,
-      description: SYNTHETIC_NOTICE,
+      description: syntheticNotice(model.config.branding),
+      creator: creatorName(model.config.branding),
     }),
   };
 }

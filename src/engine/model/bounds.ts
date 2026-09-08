@@ -50,6 +50,11 @@ export const START_YEAR_MAX = 2030;
 /** A story is a caption, not a paragraph. */
 export const STORY_MAX_CHARS = 160;
 
+/** A brand is a name, not a sentence. */
+export const BRAND_NAME_MAX_CHARS = 60;
+/** The small print is a sentence or two, not a licence. */
+export const BRAND_NOTICE_MAX_CHARS = 200;
+
 function fmt(n: number): string {
   return n.toLocaleString("en-US");
 }
@@ -146,6 +151,39 @@ export function validateScenarioConfig(config: ScenarioConfig): string[] {
       const repeated = [...new Set(variants.filter((v, i) => variants.indexOf(v) !== i))];
       if (repeated.length > 0) {
         errors.push(`variants: ${repeated.map((v) => `"${String(v)}"`).join(", ")} listed more than once — a form is either asked for or it is not.`);
+      }
+    }
+  }
+
+  // The names a sibling app puts on the paper. Same reasoning as `story` above
+  // and one more besides: these three strings are the only ones in a package a
+  // human wrote that appear on *every* document, so a name belonging to another
+  // app in the family would spread further from here than from anywhere else.
+  const branding = config.branding;
+  if (branding !== undefined) {
+    if (typeof branding !== "object" || branding === null || Array.isArray(branding)) {
+      errors.push("branding: the names on the paper are an object — leave it out altogether and the package names this app.");
+    } else {
+      const limits = [
+        ["forge", BRAND_NAME_MAX_CHARS],
+        ["scanner", BRAND_NAME_MAX_CHARS],
+        ["notice", BRAND_NOTICE_MAX_CHARS],
+      ] as const;
+      for (const [field, max] of limits) {
+        const value = branding[field];
+        if (value === undefined) continue;
+        if (typeof value !== "string" || value.trim() === "") {
+          errors.push(`branding.${field}: a name is a line of text — leave it out altogether rather than blank.`);
+          continue;
+        }
+        if (value.length > max) {
+          errors.push(`branding.${field}: ${value.length} characters, over the ${max}-character limit.`);
+          continue;
+        }
+        const hit = RESERVED_NAMES.find((n) => value.toLowerCase().includes(n.toLowerCase()));
+        if (hit !== undefined) {
+          errors.push(`branding.${field}: "${hit}" belongs to another app in the family and cannot appear in a forged package.`);
+        }
       }
     }
   }

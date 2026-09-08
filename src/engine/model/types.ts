@@ -46,6 +46,21 @@ export const SCHEME_ORDER: readonly SchemeId[] = Object.freeze([
   "portfolio_allocation",
 ]);
 
+/**
+ * What a forged package calls the app that forged it, and the app that reads it.
+ *
+ * Each field absent means this app's own name; see `src/engine/render/artifact.ts`,
+ * where the three strings are composed.
+ */
+export interface Branding {
+  /** Replaces "Recon Foundry" wherever a document names its maker. */
+  forge?: string;
+  /** Replaces "Red-Flag Scanner" wherever a document names the app that reads it. */
+  scanner?: string;
+  /** The whole small-print sentence, when the composed one says "for training" and should not. */
+  notice?: string;
+}
+
 export interface ScenarioConfig {
   /** Any string. Hashed to the root of every stream; the whole scenario follows from it. */
   seed: string;
@@ -114,6 +129,26 @@ export interface ScenarioConfig {
    * tax in the same calendar year however its bills arrive. See docs/adr/0006.
    */
   variants?: VariantId[];
+  /**
+   * The names the forged documents give to the app that made them.
+   *
+   * Absent — and it is absent in every package this app forges for itself —
+   * every document carries the strings it always carried, to the byte. That is
+   * the whole contract of this field, and `tests/branding.test.ts` holds it
+   * alongside the pinned regression fixtures.
+   *
+   * It exists because a package is a handout, and a handout that names an app
+   * the reader has never heard of reads like it was borrowed. A sibling app
+   * that forges packages under its own masthead sets the names here rather than
+   * editing the documents afterwards, which would break every tie in them.
+   *
+   * Nothing here reaches a figure, a tie, a scheme or the answer key. It is the
+   * paper's letterhead and nothing else. `bounds.ts` holds each string to a
+   * name's length and refuses the names the family has already spoken for, on
+   * the same reasoning as `story` above; the Describe validator does not
+   * whitelist it, so a pasted draft can never set it (ADR 0004).
+   */
+  branding?: Branding;
 }
 
 export interface Address {

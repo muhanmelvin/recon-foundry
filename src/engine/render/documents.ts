@@ -22,7 +22,7 @@ import { buildLeaseDoc, sectionsOf, type LeaseArticle, type LeaseDoc } from "./l
 import { anchorFor } from "./lease/sections.ts";
 import { esc, htmlDocument, pct, rows, usd } from "./html.ts";
 import { documentName, termDocumentName } from "../package/filenames.ts";
-import { SYNTHETIC_NOTICE, type Artifact } from "./artifact.ts";
+import { syntheticNotice, type Artifact } from "./artifact.ts";
 
 function sum(xs: readonly number[]): number {
   let s = 0;
@@ -34,8 +34,8 @@ function mulRate(cents: number, rate: number): number {
   return Math.round(Math.abs(cents) * rate + 1e-9) * (cents < 0 ? -1 : 1);
 }
 
-function notice(): string {
-  return `<p class="notice">${esc(SYNTHETIC_NOTICE)}</p>`;
+function notice(model: ScenarioModel): string {
+  return `<p class="notice">${esc(syntheticNotice(model.config.branding))}</p>`;
 }
 
 function letterhead(who: string, sub: string, meta: string[]): string {
@@ -121,7 +121,7 @@ export function renderBillingStatement(model: ScenarioModel, year: number): Arti
         : `Applied to Tenant's account within thirty (30) days of this statement.`
     }</div></div>` +
     `<p class="small">Enclosed: reconciliation workbook with general ledger detail; real estate tax bills and the collector's account; the insurance invoice and declaration page; the capital amortization schedule.</p>` +
-    notice() +
+    notice(model) +
     `</div>`;
 
   return {
@@ -232,7 +232,7 @@ function taxBillPage(model: ScenarioModel, parcel: TaxParcel, bill: TaxParcelYea
     `<tr class="total"><td colspan="${span}">Total ${esc(label)} tax</td><td class="num">${usd(total)}</td></tr>` +
     `</tbody></table>` +
     `<p class="small">${notes.map((n) => esc(n)).join(" ")}</p>` +
-    notice() +
+    notice(model) +
     `</div>`
   );
 }
@@ -304,7 +304,7 @@ export function renderTaxBackup(model: ScenarioModel, year: number): Artifact {
     `<tr class="total"><td colspan="3">Net tax borne by the property in ${year}</td><td class="num">${usd(charged - credited)}</td><td class="num"></td></tr>` +
     `</tbody></table>` +
     split +
-    notice() +
+    notice(model) +
     `</div>`;
 
   return {
@@ -363,7 +363,7 @@ export function renderInsuranceBackup(model: ScenarioModel, year: number): Artif
     `</tbody></table>` +
     `<p class="small">Premium is fully earned at inception. The declaration page overleaf states the coverages, limits and deductibles this premium buys.</p>` +
     schedule +
-    notice() +
+    notice(model) +
     `</div>`;
 
   const dec =
@@ -385,7 +385,7 @@ export function renderInsuranceBackup(model: ScenarioModel, year: number): Artif
       { label: "Total", value: usd(py.premium_cents + py.fees_cents) },
     ]) +
     `</dl>` +
-    notice() +
+    notice(model) +
     `</div>`;
 
   return {
@@ -436,7 +436,7 @@ export function renderProjectBackup(model: ScenarioModel, year: number): Artifac
         ]) +
         `</dl><p class="small">Recovered in accordance with Section 6.04 of the Lease. The full schedule accompanies this invoice.</p>`
       : `<p class="small">Charged to the property's repairs and maintenance account in the year of the work.</p>`) +
-    notice() +
+    notice(model) +
     `</div>`;
 
   return {
@@ -489,7 +489,7 @@ export function renderLease(model: ScenarioModel): Artifact {
     `<p class="small">${esc(u.premises_suite)}, ${esc(u.property_name)}<br>${esc(u.address.line1)}, ${esc(u.address.city)}, ${esc(u.address.state)} ${esc(u.address.zip)}</p>` +
     `<p style="margin-top:36px"><span class="stamp">Synthetic — training only</span></p></div>` +
     tableOfContents(doc) +
-    notice() +
+    notice(model) +
     `</div>`;
 
   const clauses = (a: LeaseArticle) =>
@@ -514,7 +514,7 @@ export function renderLease(model: ScenarioModel): Artifact {
         doc.rider.map((a) => `<h2>${esc(a.numeral)} — ${esc(a.title)}</h2>` + clauses(a)).join("")
       : "";
 
-  const pages = cover + `<div class="page">` + body + rider + notice() + `</div>`;
+  const pages = cover + `<div class="page">` + body + rider + notice(model) + `</div>`;
   const lastYear = model.years[model.years.length - 1]!.year;
 
   return {

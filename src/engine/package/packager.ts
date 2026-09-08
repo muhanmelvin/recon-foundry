@@ -19,7 +19,7 @@ import { renderBillingStatement, renderInsuranceBackup, renderLease, renderProje
 import { renderReconPackageJson } from "../render/recon-package.ts";
 import { renderAnswerSheet } from "../render/answer-sheet.ts";
 import { toScannerManifest, type AnswerKey } from "../model/answer-key.ts";
-import { SYNTHETIC_NOTICE, type Artifact } from "../render/artifact.ts";
+import { forgeName, syntheticNotice, type Artifact } from "../render/artifact.ts";
 import { ANSWER_KEY_FOLDER, packageFolder, termDocumentName } from "./filenames.ts";
 import type { ScenarioModel } from "../model/types.ts";
 
@@ -82,7 +82,7 @@ export function aboutText(model: ScenarioModel, key: AnswerKey): string {
   const lines = [
     "ABOUT THIS PACKAGE",
     "",
-    SYNTHETIC_NOTICE,
+    syntheticNotice(model.config.branding),
     "",
     `Property:      ${u.property_name}, ${u.address.line1}, ${u.address.city}, ${u.address.state} ${u.address.zip}`,
     `Tenant:        ${u.tenant_name}, ${u.premises_suite}`,
@@ -95,7 +95,7 @@ export function aboutText(model: ScenarioModel, key: AnswerKey): string {
     "",
     "There is no such place as the State of Franklin, and no such ZIP code as",
     `${u.address.zip}. Every party, vendor, parcel, policy and figure in these`,
-    "documents was invented by Recon Foundry. Nothing here is a real lease, a",
+    `documents was invented by ${forgeName(model.config.branding)}. Nothing here is a real lease, a`,
     "real property, or a real client's reconciliation.",
     "",
     "Forge this package again from the same seed and you will get the same bytes,",
